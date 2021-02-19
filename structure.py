@@ -4,9 +4,9 @@ from dedalus.tools.cache import CachedFunction
 from dedalus.tools import logging
 
 def lane_emden(Nmax, Lmax=0, m=1.5, n_rho=3, radius=1,
-               ncc_cutoff = 1e-10, tolerance = 1e-10, dtype=np.float64):
+               ncc_cutoff = 1e-10, tolerance = 1e-10, dtype=np.float64, comm=None):
     c = coords.SphericalCoordinates('phi', 'theta', 'r')
-    d = distributor.Distributor((c,))
+    d = distributor.Distributor((c,), comm=comm)
     b = basis.BallBasis(c, (1, 1, Nmax+1), radius=radius, dtype=dtype)
     br = b.radial_basis
     phi, theta, r = b.local_grids((1, 1, 1))
@@ -47,6 +47,8 @@ def lane_emden(Nmax, Lmax=0, m=1.5, n_rho=3, radius=1,
     lnρ['g'] = np.log(ρ['g'])
 
     structure = {'T':T,'lnρ':lnρ}
+    for key in structure:
+        structure[key].require_scales(1)
     return structure
 
 if __name__=="__main__":

@@ -33,6 +33,8 @@ Options:
                                          Make sure "--label" is set to avoid overwriting the previous run.
 
     --label=<label>                      Additional label for run output directory
+
+    --debug                              Produce debugging output for NCCs
 """
 import numpy as np
 import dedalus.public as de
@@ -74,7 +76,7 @@ radius = 1
 Ek = Ekman = float(args['--Ekman'])
 Co2 = ConvectiveRossbySq = float(args['--ConvectiveRossbySq'])
 Pr = Prandtl = float(args['--Prandtl'])
-
+logger.info("Ek = {}, Co2 = {}, Pr = {}".format(Ek,Co2,Pr))
 # load balancing for real variables and parallel runs
 if Lmax % 2 == 1:
     nm = 2*(Lmax+1)
@@ -84,10 +86,12 @@ else:
 L_dealias = 3/2
 N_dealias = 3/2
 
+start_time = time.time()
 c = de.coords.SphericalCoordinates('phi', 'theta', 'r')
 d = de.distributor.Distributor((c,), mesh=mesh)
 b = de.basis.BallBasis(c, (nm,Lmax+1,Nmax+1), radius=radius, dealias=(L_dealias,L_dealias,N_dealias), dtype=np.float64)
 b_S2 = b.S2_basis()
+phi1, theta1, r1 = b.local_grids((1,1,1))
 phi, theta, r = b.local_grids((L_dealias,L_dealias,N_dealias))
 phig,thetag,rg= b.global_grids((L_dealias,L_dealias,N_dealias))
 theta_target = thetag[0,(Lmax+1)//2,0]
@@ -121,11 +125,16 @@ ez['g'][1] = -np.sin(theta)
 ez['g'][2] =  np.cos(theta)
 ez_g = de.operators.Grid(ez).evaluate()
 
-structure = lane_emden(Nmax, n_rho=n_rho, m=1.5)
+structure = lane_emden(Nmax, n_rho=n_rho, m=1.5, comm=MPI.COMM_SELF)
+
 T = de.field.Field(dist=d, bases=(b.radial_basis,), dtype=np.float64)
-T['g'] = structure['T']['g']
 lnρ = de.field.Field(dist=d, bases=(b.radial_basis,), dtype=np.float64)
+
+T['g'] = structure['T']['g']
 lnρ['g'] = structure['lnρ']['g']
+# for i, r_i in enumerate(r1[0,0,:]):
+#     T['g'][:,:,i] = structure['T'](r=r_i).evaluate()['g']
+#     lnρ['g'][:,:,i] = structure['lnρ'](r=r_i).evaluate()['g']
 
 lnT = d_log(T).evaluate()
 T_inv = power(T,-1).evaluate()
@@ -135,13 +144,12 @@ grad_lnρ = grad(lnρ).evaluate()
 ρ_inv = d_exp(-lnρ).evaluate()
 
 # Entropy source function, inspired from MESA model
-#source = de.field.Field(dist=d, bases=(b.radial_basis,), dtype=np.float64)
 source = de.field.Field(dist=d, bases=(b,), dtype=np.float64)
 source.require_scales(L_dealias)
 # from fits to MESA profile on r = [0,0.85]
 σ = 0.11510794072958948
 Q0_over_Q1 = 10.969517734412433
-Q1 = σ**2/(Q0_over_Q1 + 1) # normalize to σ**2 at r=0
+Q1 = σ**-2/(Q0_over_Q1 + 1) # normalize to σ**-2 at r=0
 source['g'] = (Q0_over_Q1*np.exp(-r**2/(2*σ**2)) + 1)*Q1
 # normalization from Brown et al 2020
 #source['g'] /= source(r=0).evaluate()/σ**2
@@ -156,14 +164,56 @@ trace_e = trace(e)
 trace_e.store_last = True
 Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 # Problem
+if args['--debug']:
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(nrows=3, ncols=2)
+    ax[0,0].plot(r[0,0,:], T['g'][0,0,:])
+    ax[0,1].plot(r[0,0,:], lnρ['g'][0,0,:])
+    ax[1,0].plot(r[0,0,:], grad_lnT['g'][2][0,0,:])
+    ax[1,1].plot(r[0,0,:], grad_lnρ['g'][2][0,0,:])
+    ax[2,0].plot(r[0,0,:], T_inv['g'][0,0,:])
+    ax[2,1].plot(r[0,0,:], ρ_inv['g'][0,0,:])
+    ax[0,0].set_ylabel('T')
+    ax[0,1].set_ylabel(r'$\ln \rho$')
+    ax[1,0].set_ylabel('gradT')
+    ax[1,1].set_ylabel('gradlnrho')
+    ax[2,0].set_ylabel('1/T')
+    ax[2,1].set_ylabel('1/ρ')
+    plt.tight_layout()
+    fig.savefig('nccs.pdf')
+    print(grad_lnρ['g'][2])
+
+    fig, ax = plt.subplots(nrows=3, ncols=2)
+    ax[0,0].plot(np.abs(T['c'][0,0,:]))
+    ax[0,1].plot(np.abs(lnρ['c'][0,0,:]))
+    ax[1,0].plot(np.abs(grad_lnT['c'][2][0,0,:]))
+    ax[1,1].plot(np.abs(grad_lnρ['c'][2][0,0,:]))
+    ax[2,0].plot(np.abs(T_inv['c'][0,0,:]))
+    ax[2,1].plot(np.abs(ρ_inv['c'][0,0,:]))
+    ax[0,0].set_ylabel('T')
+    ax[0,1].set_ylabel(r'$\ln \rho$')
+    ax[1,0].set_ylabel('gradT')
+    ax[1,1].set_ylabel('gradlnrho')
+    ax[2,0].set_ylabel('1/T')
+    ax[2,1].set_ylabel('1/ρ')
+    for axi in ax:
+        for axii in axi:
+            axii.set_yscale('log')
+    plt.tight_layout()
+    fig.savefig('nccs_coeff.pdf')
+    print(ρ_inv['c'])
+
+    ρ_inv['g'] = 1
+    print("rho inv: {}".format(ρ_inv['g']))
+
 problem = problems.IVP([u, p, s, τ_u, τ_s])
 problem.add_equation((ddt(u) + grad(p) - Co2*T*grad(s) - Ek*ρ_inv*viscous_terms + LiftTau(τ_u,-1),
                       - dot(u, e) - cross(ez_g, u)), condition = "ntheta != 0")
 problem.add_equation((dot(grad_lnρ, u) + div(u), 0), condition = "ntheta != 0")
 problem.add_equation((u, 0), condition = "ntheta == 0")
 problem.add_equation((p, 0), condition = "ntheta == 0")
-problem.add_equation((ddt(s) - Ek/Pr*ρ_inv*(lap(s) + dot(grad_lnT, grad(s))) + LiftTau(τ_s,-1),
-                     - dot(u, grad(s)) + Ek/Pr*source + Ek/Co2*ρ_inv*T_inv*Phi))
+problem.add_equation((ddt(s) - Ek/Pr*ρ_inv*(lap(s)+ dot(grad_lnT, grad(s))) + LiftTau(τ_s,-1),
+                     - dot(u, grad(s)) + Ek/Pr*source + 1/2*Ek/Co2*ρ_inv*T_inv*Phi))
 # Boundary conditions
 problem.add_equation((radial(u(r=radius)), 0), condition = "ntheta != 0")
 problem.add_equation((radial(angular(e(r=radius))), 0), condition = "ntheta != 0")
@@ -184,7 +234,7 @@ else:
     s['g'] += amp*noise
 
 # Solver
-solver = solvers.InitialValueSolver(problem, timesteppers.CNAB2)
+solver = solvers.InitialValueSolver(problem, timesteppers.SBDF2)
 
 reducer = GlobalArrayReducer(d.comm_cart)
 weight_theta = b.local_colatitude_weights(3/2)
@@ -197,13 +247,14 @@ vol_correction = vol/vol_test
 logger.info(vol)
 
 report_cadence = 10
-energy_report_cadence = 100
+energy_report_cadence = 10
 dt = float(args['--max_dt'])
 timestepper_history = [0,1]
 hermitian_cadence = 100
 
 main_start = time.time()
-while solver.ok:
+good_solution = True
+while solver.ok and good_solution:
     if solver.iteration % energy_report_cadence == 0:
         q = (ρ*power(u,2)).evaluate()
         E0 = np.sum(vol_correction*weight_r*weight_theta*0.5*q['g'])
@@ -213,6 +264,7 @@ while solver.ok:
         T0 *= (np.pi)/(Lmax+1)/L_dealias
         T0 = reducer.reduce_scalar(T0, MPI.SUM)
         logger.info("iter: {:d}, dt={:e}, t={:e}, E0={:e}, T0={:e}".format(solver.iteration, dt, solver.sim_time, E0, T0))
+        good_solution = np.isfinite(E0)
     elif solver.iteration % report_cadence == 0:
         logger.info("iter: {:d}, dt={:e}, t={:e}".format(solver.iteration, dt, solver.sim_time))
     if solver.iteration % hermitian_cadence in timestepper_history:
@@ -225,6 +277,7 @@ end_time = time.time()
 startup_time = main_start - start_time
 main_loop_time = end_time - main_start
 DOF = nm*(Lmax+1)*(Nmax+1)
+niter = solver.iteration
 if rank==0:
     print('performance metrics:')
     print('    startup time   : {:}'.format(startup_time))
