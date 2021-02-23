@@ -65,7 +65,7 @@ else:
     log2 = np.log2(ncpu)
     if log2 == int(log2):
         mesh = [int(2**np.ceil(log2/2)),int(2**np.floor(log2/2))]
-    logger.info("running on processor mesh={}".format(mesh))
+logger.info("running on processor mesh={}".format(mesh))
 
 Lmax = int(args['--L_max'])
 Nmax = int(args['--N_max'])
@@ -130,11 +130,12 @@ structure = lane_emden(Nmax, n_rho=n_rho, m=1.5, comm=MPI.COMM_SELF)
 
 T = de.field.Field(dist=d, bases=(b.radial_basis,), dtype=np.float64)
 lnρ = de.field.Field(dist=d, bases=(b.radial_basis,), dtype=np.float64)
+ρT_inv = de.field.Field(dist=d, bases=(b,), dtype=np.float64)
 
 #T['g'] = structure['T']['g']
 #lnρ['g'] = structure['lnρ']['g']
-logger.info("shape of T['g'] {}".format(T['g'].shape))
-logger.info("size of T['g'] {}".format(T['g'].size))
+logger.info("shape and size of T['g'] {} & {}".format(T['g'].shape, T['g'].size))
+logger.info("shape and size of ρT_inv['g'] {} & {}".format(ρT_inv['g'].shape, ρT_inv['g'].size))
 if T['g'].size > 0 :
     for i, r_i in enumerate(r1[0,0,:]):
          T['g'][:,:,i] = structure['T'](r=r_i).evaluate()['g']
@@ -146,6 +147,9 @@ grad_lnT = grad(lnT).evaluate()
 ρ = d_exp(lnρ).evaluate()
 grad_lnρ = grad(lnρ).evaluate()
 ρ_inv = d_exp(-lnρ).evaluate()
+ρT_inv.require_scales(b.domain.dealias)
+if T_inv['g'].size > 0 and ρ_inv['g'].size > 0:
+    ρT_inv['g'] = T_inv['g']*ρ_inv['g']
 
 # Entropy source function, inspired from MESA model
 source = de.field.Field(dist=d, bases=(b,), dtype=np.float64)
@@ -153,10 +157,9 @@ source.require_scales(L_dealias)
 # from fits to MESA profile on r = [0,0.85]
 σ = 0.11510794072958948
 Q0_over_Q1 = 10.969517734412433
+# normalization from Brown et al 2020
 Q1 = σ**-2/(Q0_over_Q1 + 1) # normalize to σ**-2 at r=0
 source['g'] = (Q0_over_Q1*np.exp(-r**2/(2*σ**2)) + 1)*Q1
-# normalization from Brown et al 2020
-#source['g'] /= source(r=0).evaluate()/σ**2
 logger.info("Source function: Q0/Q1 = {:}, σ = {:}, Q1 = {:}".format(Q0_over_Q1, σ, Q1))
 
 #e = 0.5*(grad(u) + trans(grad(u)))
@@ -218,7 +221,7 @@ problem.add_equation((dot(grad_lnρ, u) + div(u), 0), condition = "ntheta != 0")
 problem.add_equation((u, 0), condition = "ntheta == 0")
 problem.add_equation((p, 0), condition = "ntheta == 0")
 problem.add_equation((ddt(s) - Ek/Pr*ρ_inv*(lap(s)+ dot(grad_lnT, grad(s))) + LiftTau(τ_s,-1),
-                     - dot(u, grad(s)) + Ek/Pr*source ))#  + 1/2*Ek/Co2*ρ_inv*T_inv*Phi))
+                     - dot(u, grad(s)) + Ek/Pr*source + 1/2*Ek/Co2*ρT_inv*Phi))
 # Boundary conditions
 problem.add_equation((radial(u(r=radius)), 0), condition = "ntheta != 0")
 problem.add_equation((radial(angular(e(r=radius))), 0), condition = "ntheta != 0")
