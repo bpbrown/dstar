@@ -147,9 +147,10 @@ grad_lnT = grad(lnT).evaluate()
 ρ = d_exp(lnρ).evaluate()
 grad_lnρ = grad(lnρ).evaluate()
 ρ_inv = d_exp(-lnρ).evaluate()
-ρT_inv.require_scales(b.domain.dealias)
-if T_inv['g'].size > 0 and ρ_inv['g'].size > 0:
-    ρT_inv['g'] = T_inv['g']*ρ_inv['g']
+ρT_inv_rb = (T_inv*ρ_inv).evaluate()
+ρT_inv_rb.require_scales(1)
+if ρT_inv_rb['g'].size > 0:
+    ρT_inv['g'] = ρT_inv_rb['g']
 
 # Entropy source function, inspired from MESA model
 source = de.field.Field(dist=d, bases=(b,), dtype=np.float64)
