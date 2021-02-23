@@ -218,7 +218,7 @@ problem.add_equation((dot(grad_lnρ, u) + div(u), 0), condition = "ntheta != 0")
 problem.add_equation((u, 0), condition = "ntheta == 0")
 problem.add_equation((p, 0), condition = "ntheta == 0")
 problem.add_equation((ddt(s) - Ek/Pr*ρ_inv*(lap(s)+ dot(grad_lnT, grad(s))) + LiftTau(τ_s,-1),
-                     - dot(u, grad(s))))# + Ek/Pr*source + 1/2*Ek/Co2*ρ_inv*T_inv*Phi))
+                     - dot(u, grad(s)) + Ek/Pr*source ))#  + 1/2*Ek/Co2*ρ_inv*T_inv*Phi))
 # Boundary conditions
 problem.add_equation((radial(u(r=radius)), 0), condition = "ntheta != 0")
 problem.add_equation((radial(angular(e(r=radius))), 0), condition = "ntheta != 0")
