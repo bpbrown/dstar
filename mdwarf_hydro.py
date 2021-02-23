@@ -49,7 +49,8 @@ args = docopt(__doc__)
 
 import logging
 logger = logging.getLogger(__name__)
-
+dlog = logging.getLogger('matplotlib')
+dlog.setLevel(logging.WARNING)
 from structure import lane_emden
 
 comm = MPI.COMM_WORLD
@@ -130,11 +131,14 @@ structure = lane_emden(Nmax, n_rho=n_rho, m=1.5, comm=MPI.COMM_SELF)
 T = de.field.Field(dist=d, bases=(b.radial_basis,), dtype=np.float64)
 lnρ = de.field.Field(dist=d, bases=(b.radial_basis,), dtype=np.float64)
 
-T['g'] = structure['T']['g']
-lnρ['g'] = structure['lnρ']['g']
-# for i, r_i in enumerate(r1[0,0,:]):
-#     T['g'][:,:,i] = structure['T'](r=r_i).evaluate()['g']
-#     lnρ['g'][:,:,i] = structure['lnρ'](r=r_i).evaluate()['g']
+#T['g'] = structure['T']['g']
+#lnρ['g'] = structure['lnρ']['g']
+logger.info("shape of T['g'] {}".format(T['g'].shape))
+logger.info("size of T['g'] {}".format(T['g'].size))
+if T['g'].size > 0 :
+    for i, r_i in enumerate(r1[0,0,:]):
+         T['g'][:,:,i] = structure['T'](r=r_i).evaluate()['g']
+         lnρ['g'][:,:,i] = structure['lnρ'](r=r_i).evaluate()['g']
 
 lnT = d_log(T).evaluate()
 T_inv = power(T,-1).evaluate()
@@ -166,45 +170,46 @@ Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 # Problem
 if args['--debug']:
     import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(nrows=3, ncols=2)
-    ax[0,0].plot(r[0,0,:], T['g'][0,0,:])
-    ax[0,1].plot(r[0,0,:], lnρ['g'][0,0,:])
-    ax[1,0].plot(r[0,0,:], grad_lnT['g'][2][0,0,:])
-    ax[1,1].plot(r[0,0,:], grad_lnρ['g'][2][0,0,:])
-    ax[2,0].plot(r[0,0,:], T_inv['g'][0,0,:])
-    ax[2,1].plot(r[0,0,:], ρ_inv['g'][0,0,:])
-    ax[0,0].set_ylabel('T')
-    ax[0,1].set_ylabel(r'$\ln \rho$')
-    ax[1,0].set_ylabel('gradT')
-    ax[1,1].set_ylabel('gradlnrho')
-    ax[2,0].set_ylabel('1/T')
-    ax[2,1].set_ylabel('1/ρ')
-    plt.tight_layout()
-    fig.savefig('nccs.pdf')
-    print(grad_lnρ['g'][2])
+    if T['g'].size > 0:
+        fig, ax = plt.subplots(nrows=3, ncols=2)
+        ax[0,0].plot(r[0,0,:], T['g'][0,0,:])
+        ax[0,1].plot(r[0,0,:], lnρ['g'][0,0,:])
+        ax[1,0].plot(r[0,0,:], grad_lnT['g'][2][0,0,:])
+        ax[1,1].plot(r[0,0,:], grad_lnρ['g'][2][0,0,:])
+        ax[2,0].plot(r[0,0,:], T_inv['g'][0,0,:])
+        ax[2,1].plot(r[0,0,:], ρ_inv['g'][0,0,:])
+        ax[0,0].set_ylabel('T')
+        ax[0,1].set_ylabel(r'$\ln \rho$')
+        ax[1,0].set_ylabel('gradT')
+        ax[1,1].set_ylabel('gradlnrho')
+        ax[2,0].set_ylabel('1/T')
+        ax[2,1].set_ylabel('1/ρ')
+        plt.tight_layout()
+        fig.savefig('nccs_p{}.pdf'.format(rank))
+        print(grad_lnρ['g'][2])
+        print("rho inv: {}".format(ρ_inv['g']))
 
-    fig, ax = plt.subplots(nrows=3, ncols=2)
-    ax[0,0].plot(np.abs(T['c'][0,0,:]))
-    ax[0,1].plot(np.abs(lnρ['c'][0,0,:]))
-    ax[1,0].plot(np.abs(grad_lnT['c'][2][0,0,:]))
-    ax[1,1].plot(np.abs(grad_lnρ['c'][2][0,0,:]))
-    ax[2,0].plot(np.abs(T_inv['c'][0,0,:]))
-    ax[2,1].plot(np.abs(ρ_inv['c'][0,0,:]))
-    ax[0,0].set_ylabel('T')
-    ax[0,1].set_ylabel(r'$\ln \rho$')
-    ax[1,0].set_ylabel('gradT')
-    ax[1,1].set_ylabel('gradlnrho')
-    ax[2,0].set_ylabel('1/T')
-    ax[2,1].set_ylabel('1/ρ')
-    for axi in ax:
-        for axii in axi:
-            axii.set_yscale('log')
-    plt.tight_layout()
-    fig.savefig('nccs_coeff.pdf')
-    print(ρ_inv['c'])
-
-    ρ_inv['g'] = 1
-    print("rho inv: {}".format(ρ_inv['g']))
+    if T['c'].size > 0:
+        fig, ax = plt.subplots(nrows=3, ncols=2)
+        ax[0,0].plot(np.abs(T['c'][0,0,:]))
+        ax[0,1].plot(np.abs(lnρ['c'][0,0,:]))
+        ax[1,0].plot(np.abs(grad_lnT['c'][2][0,0,:]))
+        ax[1,1].plot(np.abs(grad_lnρ['c'][2][0,0,:]))
+        ax[2,0].plot(np.abs(T_inv['c'][0,0,:]))
+        ax[2,1].plot(np.abs(ρ_inv['c'][0,0,:]))
+        ax[0,0].set_ylabel('T')
+        ax[0,1].set_ylabel(r'$\ln \rho$')
+        ax[1,0].set_ylabel('gradT')
+        ax[1,1].set_ylabel('gradlnrho')
+        ax[2,0].set_ylabel('1/T')
+        ax[2,1].set_ylabel('1/ρ')
+        for axi in ax:
+            for axii in axi:
+                axii.set_yscale('log')
+        plt.tight_layout()
+        fig.savefig('nccs_coeff_p{}.pdf'.format(rank))
+        print(grad_lnρ['c'])
+        print(ρ_inv['c'])
 
 problem = problems.IVP([u, p, s, τ_u, τ_s])
 problem.add_equation((ddt(u) + grad(p) - Co2*T*grad(s) - Ek*ρ_inv*viscous_terms + LiftTau(τ_u,-1),
@@ -213,7 +218,7 @@ problem.add_equation((dot(grad_lnρ, u) + div(u), 0), condition = "ntheta != 0")
 problem.add_equation((u, 0), condition = "ntheta == 0")
 problem.add_equation((p, 0), condition = "ntheta == 0")
 problem.add_equation((ddt(s) - Ek/Pr*ρ_inv*(lap(s)+ dot(grad_lnT, grad(s))) + LiftTau(τ_s,-1),
-                     - dot(u, grad(s)) + Ek/Pr*source + 1/2*Ek/Co2*ρ_inv*T_inv*Phi))
+                     - dot(u, grad(s))))# + Ek/Pr*source + 1/2*Ek/Co2*ρ_inv*T_inv*Phi))
 # Boundary conditions
 problem.add_equation((radial(u(r=radius)), 0), condition = "ntheta != 0")
 problem.add_equation((radial(angular(e(r=radius))), 0), condition = "ntheta != 0")
@@ -256,7 +261,8 @@ main_start = time.time()
 good_solution = True
 while solver.ok and good_solution:
     if solver.iteration % energy_report_cadence == 0:
-        q = (ρ*power(u,2)).evaluate()
+        #q = (ρ*power(u,2)).evaluate() # can't eval in parallel with ρ
+        q = (power(u,2)).evaluate()
         E0 = np.sum(vol_correction*weight_r*weight_theta*0.5*q['g'])
         E0 *= (np.pi)/(Lmax+1)/L_dealias
         E0 = reducer.reduce_scalar(E0, MPI.SUM)
