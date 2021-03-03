@@ -116,8 +116,8 @@ angular = lambda A: de.operators.AngularComponent(A, index=1)
 trace = lambda A: de.operators.Trace(A)
 power = lambda A, B: de.operators.Power(A, B)
 LiftTau = lambda A, n: de.operators.LiftTau(A,b,n)
-d_exp = lambda A: de.operators.UnaryGridFunctionField(np.exp, A)
-d_log = lambda A: de.operators.UnaryGridFunctionField(np.log, A)
+d_exp = lambda A: de.operators.UnaryGridFunction(np.exp, A)
+d_log = lambda A: de.operators.UnaryGridFunction(np.log, A)
 
 # NCCs and variables of the problem
 ez = de.field.Field(dist=d, bases=(b,), tensorsig=(c,), dtype=np.float64)
