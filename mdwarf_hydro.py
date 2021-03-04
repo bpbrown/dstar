@@ -19,7 +19,7 @@ Options:
     --benchmark                          Use benchmark initial conditions
     --ell_benchmark=<ell_benchmark>      Integer value of benchmark perturbation m=+-ell [default: 3]
 
-    --max_dt=<max_dt>                    Largest possible timestep [default: 0.5]
+    --max_dt=<max_dt>                    Largest possible timestep [default: 0.1]
     --safety=<safety>                    CFL safety factor [default: 0.4]
 
     --run_time_diffusion=<run_time_d>    How long to run, in diffusion times [default: 20]
@@ -34,6 +34,7 @@ Options:
 
     --label=<label>                      Additional label for run output directory
 
+    --ncc_cutoff=<ncc_cutoff>            Amplitude to truncate NCC terms [default: 1e-10]
     --debug                              Produce debugging output for NCCs
 """
 import numpy as np
@@ -70,6 +71,7 @@ logger.info("running on processor mesh={}".format(mesh))
 Lmax = int(args['--L_max'])
 Nmax = int(args['--N_max'])
 #niter = int(float(args['--niter']))
+ncc_cutoff = float(args['--ncc_cutoff'])
 
 n_rho = float(args['--n_rho'])
 radius = 1
@@ -197,8 +199,8 @@ if args['--debug']:
         fig, ax = plt.subplots(nrows=3, ncols=2)
         ax[0,0].plot(np.abs(T['c'][0,0,:]))
         ax[0,1].plot(np.abs(lnρ['c'][0,0,:]))
-        ax[1,0].plot(np.abs(grad_lnT['c'][2][0,0,:]))
-        ax[1,1].plot(np.abs(grad_lnρ['c'][2][0,0,:]))
+        ax[1,0].plot(np.abs(grad_lnT['c'][1][0,0,:])) # index 1 is spin 0
+        ax[1,1].plot(np.abs(grad_lnρ['c'][1][0,0,:])) # index 1 is spin 0
         ax[2,0].plot(np.abs(T_inv['c'][0,0,:]))
         ax[2,1].plot(np.abs(ρ_inv['c'][0,0,:]))
         ax[0,0].set_ylabel('T')
@@ -209,13 +211,12 @@ if args['--debug']:
         ax[2,1].set_ylabel('1/ρ')
         for axi in ax:
             for axii in axi:
+                axii.axhline(y=ncc_cutoff, linestyle='dashed', color='xkcd:grey')
                 axii.set_yscale('log')
         plt.tight_layout()
         fig.savefig('nccs_coeff_p{}.pdf'.format(rank))
-        print(grad_lnρ['c'])
-        print(ρ_inv['c'])
 
-problem = problems.IVP([u, p, s, τ_u, τ_s])
+problem = problems.IVP([u, p, s, τ_u, τ_s], ncc_cutoff=ncc_cutoff)
 problem.add_equation((ddt(u) + grad(p) - Co2*T*grad(s) - Ek*ρ_inv*viscous_terms + LiftTau(τ_u,-1),
                       - dot(u, e) - cross(ez_g, u)), condition = "ntheta != 0")
 problem.add_equation((dot(grad_lnρ, u) + div(u), 0), condition = "ntheta != 0")
@@ -255,8 +256,8 @@ vol_correction = vol/vol_test
 
 logger.info(vol)
 
-report_cadence = 10
-energy_report_cadence = 10
+report_cadence = 1
+energy_report_cadence = 1
 dt = float(args['--max_dt'])
 timestepper_history = [0,1]
 hermitian_cadence = 100
