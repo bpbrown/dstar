@@ -41,6 +41,13 @@ import numpy as np
 import dedalus.public as de
 from dedalus.core import arithmetic, timesteppers, problems, solvers
 from dedalus.extras.flow_tools import GlobalArrayReducer
+from dedalus.tools.config import config
+from dedalus.tools.parallel import Sync
+
+import pathlib
+import os
+import sys
+import h5py
 
 from mpi4py import MPI
 import time
@@ -80,6 +87,22 @@ Ek = Ekman = float(args['--Ekman'])
 Co2 = ConvectiveRossbySq = float(args['--ConvectiveRossbySq'])
 Pr = Prandtl = float(args['--Prandtl'])
 logger.info("Ek = {}, Co2 = {}, Pr = {}".format(Ek,Co2,Pr))
+
+data_dir = sys.argv[0].split('.py')[0]
+data_dir += '_Ek{}_Co{}_Pr{}'.format(args['--Ekman'],args['--ConvectiveRossbySq'],args['--Prandtl'])
+if args['--benchmark']:
+    data_dir += '_benchmark'
+    
+config['logging']['filename'] = os.path.join(data_dir,'logs/dedalus_log')
+config['logging']['file_level'] = 'DEBUG'
+with Sync() as sync:
+    if sync.comm.rank == 0:
+        if not os.path.exists('{:s}/'.format(data_dir)):
+            os.mkdir('{:s}/'.format(data_dir))
+        logdir = os.path.join(data_dir,'logs')
+        if not os.path.exists(logdir):
+            os.mkdir(logdir)
+
 # load balancing for real variables and parallel runs
 if Lmax % 2 == 1:
     nm = 2*(Lmax+1)
@@ -214,6 +237,33 @@ dt = float(args['--max_dt'])
 timestepper_history = [0,1]
 hermitian_cadence = 100
 
+solver.stop_iteration = int(float(args['--run_time_iter']))
+
+if rank == 0:
+    scalar_file = pathlib.Path('{:s}/scalar_output.h5'.format(data_dir)).absolute()
+    if os.path.exists(str(scalar_file)):
+        scalar_file.unlink()
+    scalar_f = h5py.File('{:s}'.format(str(scalar_file)), 'a')
+    parameter_group = scalar_f.create_group('parameters')
+    parameter_group['ConvectiveRossbySq'] = ConvectiveRossbySq
+    parameter_group['Ekman'] = Ekman
+    parameter_group['Prandtl'] = Prandtl
+    parameter_group['n_rho'] = n_rho
+    parameter_group['L'] = Lmax
+    parameter_group['N'] = Nmax
+    parameter_group['dt_max'] = float(args['--max_dt'])
+
+    scale_group = scalar_f.create_group('scales')
+    scale_group.create_dataset(name='sim_time', shape=(0,), maxshape=(None,), dtype=np.float64)
+    task_group = scalar_f.create_group('tasks')
+    scalar_keys = ['E0', 'T0']
+    for key in scalar_keys:
+        task_group.create_dataset(name=key, shape=(0,), maxshape=(None,), dtype=np.float64)
+    scalar_index = 0
+    scalar_f.close()
+    from collections import OrderedDict
+    scalar_data = OrderedDict()
+
 main_start = time.time()
 good_solution = True
 while solver.ok and good_solution:
@@ -227,6 +277,20 @@ while solver.ok and good_solution:
         T0 = reducer.reduce_scalar(T0, MPI.SUM)
         logger.info("iter: {:d}, dt={:.2e}, t={:.3e}, E0={:e}, T0={:e}".format(solver.iteration, dt, solver.sim_time, E0, T0))
         good_solution = np.isfinite(E0)
+
+        if rank == 0:
+            scalar_data['T0'] = T0
+            scalar_data['E0'] = E0
+
+            scalar_f = h5py.File('{:s}'.format(str(scalar_file)), 'a')
+            scalar_f['scales/sim_time'].resize(scalar_index+1, axis=0)
+            scalar_f['scales/sim_time'][scalar_index] = solver.sim_time
+            for key in scalar_data:
+                scalar_f['tasks/'+key].resize(scalar_index+1, axis=0)
+                scalar_f['tasks/'+key][scalar_index] = scalar_data[key]
+            scalar_index += 1
+            scalar_f.close()
+
     elif solver.iteration % report_cadence == 0:
         logger.info("iter: {:d}, dt={:.2e}, t={:.3e}".format(solver.iteration, dt, solver.sim_time))
     if solver.iteration % hermitian_cadence in timestepper_history:
