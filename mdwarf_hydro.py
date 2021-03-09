@@ -231,7 +231,7 @@ problem.add_equation((τ_u, 0), condition = "ntheta == 0")
 problem.add_equation((s(r=radius), 0))
 logger.info("Problem built")
 
-amp = 1e-5
+amp = 1e-2
 if args['--benchmark']:
     𝓁 = int(args['--ell_benchmark'])
     norm = 1/(2**𝓁*np.math.factorial(𝓁))*np.sqrt(np.math.factorial(2*𝓁+1)/(4*np.pi))
@@ -256,8 +256,8 @@ vol_correction = vol/vol_test
 
 logger.info(vol)
 
-report_cadence = 1
-energy_report_cadence = 1
+report_cadence = 10
+energy_report_cadence = 10
 dt = float(args['--max_dt'])
 timestepper_history = [0,1]
 hermitian_cadence = 100
@@ -266,8 +266,7 @@ main_start = time.time()
 good_solution = True
 while solver.ok and good_solution:
     if solver.iteration % energy_report_cadence == 0:
-        #q = (ρ*power(u,2)).evaluate() # can't eval in parallel with ρ
-        q = (power(u,2)).evaluate()
+        q = (ρ*power(u,2)).evaluate()
         E0 = np.sum(vol_correction*weight_r*weight_theta*0.5*q['g'])
         E0 *= (np.pi)/(Lmax+1)/L_dealias
         E0 = reducer.reduce_scalar(E0, MPI.SUM)
