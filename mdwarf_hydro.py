@@ -22,9 +22,8 @@ Options:
     --max_dt=<max_dt>                    Largest possible timestep [default: 0.1]
     --safety=<safety>                    CFL safety factor [default: 0.4]
 
-    --run_time_diffusion=<run_time_d>    How long to run, in diffusion times [default: 20]
-    --run_time_rotation=<run_time_rot>   How long to run, in rotation timescale; overrides run_time_diffusion if set
-    --run_time_iter=<run_time_i>         How long to run, in iterations
+    --run_time=<run_time>                How long to run, in rotating time units
+    --niter=<niter>                      How long to run, in iterations
 
     --dt_output=<dt_output>              Time between outputs, in rotation times (P_rot = 4pi) [default: 2]
     --scalar_dt_output=<dt_scalar_out>   Time between scalar outputs, in rotation times (P_rot = 4pi) [default: 2]
@@ -77,7 +76,15 @@ logger.info("running on processor mesh={}".format(mesh))
 
 Lmax = int(args['--L_max'])
 Nmax = int(args['--N_max'])
-#niter = int(float(args['--niter']))
+if args['--niter']:
+    niter = int(float(args['--niter']))
+else:
+    niter = np.inf
+if args['--run_time']:
+    run_time = float(args['--run_time'])
+else:
+    run_time = np.inf
+
 ncc_cutoff = float(args['--ncc_cutoff'])
 
 n_rho = float(args['--n_rho'])
@@ -92,7 +99,7 @@ data_dir = sys.argv[0].split('.py')[0]
 data_dir += '_Ek{}_Co{}_Pr{}'.format(args['--Ekman'],args['--ConvectiveRossbySq'],args['--Prandtl'])
 if args['--benchmark']:
     data_dir += '_benchmark'
-    
+
 config['logging']['filename'] = os.path.join(data_dir,'logs/dedalus_log')
 config['logging']['file_level'] = 'DEBUG'
 with Sync() as sync:
@@ -237,7 +244,8 @@ dt = float(args['--max_dt'])
 timestepper_history = [0,1]
 hermitian_cadence = 100
 
-solver.stop_iteration = int(float(args['--run_time_iter']))
+solver.stop_iteration = niter
+solver.stop_sim_time = run_time
 
 if rank == 0:
     scalar_file = pathlib.Path('{:s}/scalar_output.h5'.format(data_dir)).absolute()
