@@ -4,7 +4,7 @@ from dedalus.tools.cache import CachedFunction
 from dedalus.tools import logging
 
 def lane_emden(Nmax, Lmax=0, m=1.5, n_rho=3, radius=1,
-               ncc_cutoff = 1e-10, tolerance = 1e-10, dtype=np.float64, comm=None):
+               ncc_cutoff = 1e-10, tolerance = 1e-10, dtype=np.complex128, comm=None):
     c = coords.SphericalCoordinates('phi', 'theta', 'r')
     d = distributor.Distributor((c,), comm=comm)
     b = basis.BallBasis(c, (1, 1, Nmax+1), radius=radius, dtype=dtype)
@@ -21,9 +21,7 @@ def lane_emden(Nmax, Lmax=0, m=1.5, n_rho=3, radius=1,
     problem = problems.NLBVP([f, R, τ], ncc_cutoff=ncc_cutoff)
     problem.add_equation((lap(f) + LiftTau(τ), - R**2 * Pow(f,m)))
     problem.add_equation((f(r=0), 1))
-    problem.add_equation((f(r=radius), np.exp(-n_rho/m)))
-
-    #T_top['g'] = np.exp(-n_rho/m)
+    problem.add_equation((f(r=radius), np.exp(-n_rho/m, dtype=dtype))) # explicit typing to match domain
 
     # Solver
     solver = solvers.NonlinearBoundaryValueSolver(problem)
