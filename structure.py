@@ -47,6 +47,8 @@ def lane_emden(Nmax, Lmax=0, m=1.5, n_rho=3, radius=1,
     structure = {'T':T,'lnρ':lnρ}
     for key in structure:
         structure[key].require_scales(1)
+    structure['r'] = r
+    structure['problem'] = {'c':c, 'b':b, 'problem':problem}
     return structure
 
 if __name__=="__main__":

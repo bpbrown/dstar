@@ -134,10 +134,6 @@ T = de.field.Field(dist=d, bases=(b.radial_basis,), dtype=np.float64)
 lnρ = de.field.Field(dist=d, bases=(b.radial_basis,), dtype=np.float64)
 ρT_inv = de.field.Field(dist=d, bases=(b,), dtype=np.float64)
 
-#T['g'] = structure['T']['g']
-#lnρ['g'] = structure['lnρ']['g']
-logger.info("shape and size of T['g'] {} & {}".format(T['g'].shape, T['g'].size))
-logger.info("shape and size of ρT_inv['g'] {} & {}".format(ρT_inv['g'].shape, ρT_inv['g'].size))
 if T['g'].size > 0 :
     for i, r_i in enumerate(r1[0,0,:]):
          T['g'][:,:,i] = structure['T'](r=r_i).evaluate()['g']
@@ -149,10 +145,7 @@ grad_lnT = grad(lnT).evaluate()
 ρ = d_exp(lnρ).evaluate()
 grad_lnρ = grad(lnρ).evaluate()
 ρ_inv = d_exp(-lnρ).evaluate()
-ρT_inv_rb = (T_inv*ρ_inv).evaluate()
-ρT_inv_rb.require_scales(1)
-if ρT_inv_rb['g'].size > 0:
-    ρT_inv['g'] = ρT_inv_rb['g']
+ρT_inv = (T_inv*ρ_inv).evaluate()
 
 # Entropy source function, inspired from MESA model
 source = de.field.Field(dist=d, bases=(b,), dtype=np.float64)
@@ -173,49 +166,8 @@ viscous_terms = div(e) + dot(grad_lnρ, e) - 2/3*grad(div(u)) - 2/3*grad_lnρ*di
 trace_e = trace(e)
 trace_e.store_last = True
 Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
-# Problem
-if args['--debug']:
-    import matplotlib.pyplot as plt
-    if T['g'].size > 0:
-        fig, ax = plt.subplots(nrows=3, ncols=2)
-        ax[0,0].plot(r[0,0,:], T['g'][0,0,:])
-        ax[0,1].plot(r[0,0,:], lnρ['g'][0,0,:])
-        ax[1,0].plot(r[0,0,:], grad_lnT['g'][2][0,0,:])
-        ax[1,1].plot(r[0,0,:], grad_lnρ['g'][2][0,0,:])
-        ax[2,0].plot(r[0,0,:], T_inv['g'][0,0,:])
-        ax[2,1].plot(r[0,0,:], ρ_inv['g'][0,0,:])
-        ax[0,0].set_ylabel('T')
-        ax[0,1].set_ylabel(r'$\ln \rho$')
-        ax[1,0].set_ylabel('gradT')
-        ax[1,1].set_ylabel('gradlnrho')
-        ax[2,0].set_ylabel('1/T')
-        ax[2,1].set_ylabel('1/ρ')
-        plt.tight_layout()
-        fig.savefig('nccs_p{}.pdf'.format(rank))
-        print(grad_lnρ['g'][2])
-        print("rho inv: {}".format(ρ_inv['g']))
 
-    if T['c'].size > 0:
-        fig, ax = plt.subplots(nrows=3, ncols=2)
-        ax[0,0].plot(np.abs(T['c'][0,0,:]))
-        ax[0,1].plot(np.abs(lnρ['c'][0,0,:]))
-        ax[1,0].plot(np.abs(grad_lnT['c'][1][0,0,:])) # index 1 is spin 0
-        ax[1,1].plot(np.abs(grad_lnρ['c'][1][0,0,:])) # index 1 is spin 0
-        ax[2,0].plot(np.abs(T_inv['c'][0,0,:]))
-        ax[2,1].plot(np.abs(ρ_inv['c'][0,0,:]))
-        ax[0,0].set_ylabel('T')
-        ax[0,1].set_ylabel(r'$\ln \rho$')
-        ax[1,0].set_ylabel('gradT')
-        ax[1,1].set_ylabel('gradlnrho')
-        ax[2,0].set_ylabel('1/T')
-        ax[2,1].set_ylabel('1/ρ')
-        for axi in ax:
-            for axii in axi:
-                axii.axhline(y=ncc_cutoff, linestyle='dashed', color='xkcd:grey')
-                axii.set_yscale('log')
-        plt.tight_layout()
-        fig.savefig('nccs_coeff_p{}.pdf'.format(rank))
-
+#Problem
 problem = problems.IVP([u, p, s, τ_u, τ_s], ncc_cutoff=ncc_cutoff)
 problem.add_equation((ddt(u) + grad(p) - Co2*T*grad(s) - Ek*ρ_inv*viscous_terms + LiftTau(τ_u,-1),
                       - dot(u, e) - cross(ez_g, u)), condition = "ntheta != 0")
@@ -273,10 +225,10 @@ while solver.ok and good_solution:
         T0 = np.sum(vol_correction*weight_r*weight_theta*0.5*s['g']**2)
         T0 *= (np.pi)/(Lmax+1)/L_dealias
         T0 = reducer.reduce_scalar(T0, MPI.SUM)
-        logger.info("iter: {:d}, dt={:e}, t={:e}, E0={:e}, T0={:e}".format(solver.iteration, dt, solver.sim_time, E0, T0))
+        logger.info("iter: {:d}, dt={:.2e}, t={:.3e}, E0={:e}, T0={:e}".format(solver.iteration, dt, solver.sim_time, E0, T0))
         good_solution = np.isfinite(E0)
     elif solver.iteration % report_cadence == 0:
-        logger.info("iter: {:d}, dt={:e}, t={:e}".format(solver.iteration, dt, solver.sim_time))
+        logger.info("iter: {:d}, dt={:.2e}, t={:.3e}".format(solver.iteration, dt, solver.sim_time))
     if solver.iteration % hermitian_cadence in timestepper_history:
         for field in solver.state:
             field['g']
