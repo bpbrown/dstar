@@ -101,6 +101,9 @@ data_dir = sys.argv[0].split('.py')[0]
 data_dir += '_Ek{}_Co{}_Pr{}'.format(args['--Ekman'],args['--ConvectiveRossbySq'],args['--Prandtl'])
 if args['--benchmark']:
     data_dir += '_benchmark'
+if args['--label']:
+    data_dir += '_{:s}'.format(args['--label'])
+logger.info("saving data in {}".format(data_dir))
 
 config['logging']['filename'] = os.path.join(data_dir,'logs/dedalus_log')
 config['logging']['file_level'] = 'DEBUG'
@@ -221,32 +224,12 @@ logger.info("Problem built")
 
 if args['--thermal_equilibrium']:
     logger.info("solving for thermal equilbrium")
-    d_eq = de.distributor.Distributor((c,), comm=MPI.COMM_SELF)
-    s_eq = de.field.Field(dist=d_eq, bases=(b,), dtype=np.float64)
-    τ_s_eq = de.field.Field(dist=d_eq, bases=(b_S2,), dtype=np.float64)
-    T_global = de.field.Field(dist=d_eq, bases=(b.radial_basis,), dtype=np.float64)
-    lnρ_global = de.field.Field(dist=d_eq, bases=(b.radial_basis,), dtype=np.float64)
-    T_global['g'] = structure['T']['g'].real
-    lnρ_global['g'] = structure['lnρ']['g'].real
-    grad_lnT_global = grad(d_log(T_global)).evaluate()
-    ρ_inv_global = d_exp(-lnρ_global).evaluate()
-    source_global = de.field.Field(dist=d_eq, bases=(b,), dtype=np.float64)
-    source_global.require_scales(L_dealias)
-    source_global['g'] = source_function(rg)
-    equilibrium = problems.LBVP([s_eq, τ_s_eq], ncc_cutoff=ncc_cutoff)
-    # ah... but I need the global ρ_inv, grad_lnT, source...
-    equilibrium.add_equation((- Ek/Pr*ρ_inv_global*(lap(s_eq)+ dot(grad_lnT_global, grad(s_eq))) + LiftTau(τ_s_eq,-1),
-                              Ek/Pr*source_global))
-    equilibrium.add_equation((s_eq(r=radius), 0))
+    equilibrium = problems.LBVP([s, τ_s], ncc_cutoff=ncc_cutoff)
+    equilibrium.add_equation((- Ek/Pr*ρ_inv*(lap(s)+ dot(grad_lnT, grad(s))) + LiftTau(τ_s,-1),
+                              Ek/Pr*source))
+    equilibrium.add_equation((s(r=radius), 0))
     eq_solver = solvers.LinearBoundaryValueSolver(equilibrium)
     eq_solver.solve()
-    logger.info("thermal equilbrium: s['g'] = {}".format(s_eq['g']))
-    # s_eq.require_scales(3/2)
-    # s.require_scales(3/2)
-    if rank == 0:
-        s['g'] = s_eq['g']
-    # for i, r_i in enumerate(r1[0,0,:]):
-    #     s['g'][:,:,i] = s_eq(r=r_i).evaluate()['g'][:,:,0]
 
 amp = 1e-2
 if args['--benchmark']:
