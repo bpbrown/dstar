@@ -139,6 +139,7 @@ s = de.field.Field(dist=d, bases=(b,), dtype=np.float64)
 div = lambda A: de.operators.Divergence(A, index=0)
 lap = lambda A: de.operators.Laplacian(A, c)
 grad = lambda A: de.operators.Gradient(A, c)
+curl = lambda A: de.operators.Curl(A)
 dot = lambda A, B: arithmetic.DotProduct(A, B)
 cross = lambda A, B: arithmetic.CrossProduct(A, B)
 ddt = lambda A: de.operators.TimeDerivative(A)
@@ -238,8 +239,8 @@ vol_correction = vol/vol_test
 
 logger.info(vol)
 
-report_cadence = 10
-energy_report_cadence = 10
+report_cadence = 100
+energy_report_cadence = 100
 dt = float(args['--max_dt'])
 timestepper_history = [0,1]
 hermitian_cadence = 100
@@ -264,7 +265,7 @@ if rank == 0:
     scale_group = scalar_f.create_group('scales')
     scale_group.create_dataset(name='sim_time', shape=(0,), maxshape=(None,), dtype=np.float64)
     task_group = scalar_f.create_group('tasks')
-    scalar_keys = ['E0', 'T0']
+    scalar_keys = ['E0', 'T0', 'Re', 'Ro']
     for key in scalar_keys:
         task_group.create_dataset(name=key, shape=(0,), maxshape=(None,), dtype=np.float64)
     scalar_index = 0
@@ -272,23 +273,35 @@ if rank == 0:
     from collections import OrderedDict
     scalar_data = OrderedDict()
 
+def vol_avg(q):
+    Q = np.sum(vol_correction*weight_r*weight_theta*q['g'])
+    Q *= (np.pi)/(Lmax+1)/L_dealias
+    return reducer.reduce_scalar(Q, MPI.SUM)
+
 main_start = time.time()
 good_solution = True
 while solver.ok and good_solution:
     if solver.iteration % energy_report_cadence == 0:
-        q = (ρ*power(u,2)).evaluate()
-        E0 = np.sum(vol_correction*weight_r*weight_theta*0.5*q['g'])
-        E0 *= (np.pi)/(Lmax+1)/L_dealias
-        E0 = reducer.reduce_scalar(E0, MPI.SUM)
-        T0 = np.sum(vol_correction*weight_r*weight_theta*0.5*s['g']**2)
-        T0 *= (np.pi)/(Lmax+1)/L_dealias
-        T0 = reducer.reduce_scalar(T0, MPI.SUM)
-        logger.info("iter: {:d}, dt={:.2e}, t={:.3e}, E0={:e}, T0={:e}".format(solver.iteration, dt, solver.sim_time, E0, T0))
+        q = (0.5*ρ*u**2).evaluate()
+        E0 = vol_avg(q)
+
+        q = (curl(u)**2).evaluate()
+        Ro = np.sqrt(vol_avg(q))
+
+        q = ((ρ*u)**2).evaluate()
+        Re = np.sqrt(vol_avg(q))/Ek
+
+        q = (ρ*T*s).evaluate()
+        T0 = Co2*vol_avg(q)
+
+        logger.info("iter: {:d}, dt={:.2e}, t={:.3e}, E0={:e}, T0={:e}, Re={:.2e}, Ro={:.2e}".format(solver.iteration, dt, solver.sim_time, E0, T0, Re, Ro))
         good_solution = np.isfinite(E0)
 
         if rank == 0:
             scalar_data['T0'] = T0
             scalar_data['E0'] = E0
+            scalar_data['Re'] = Re
+            scalar_data['Ro'] = Ro
 
             scalar_f = h5py.File('{:s}'.format(str(scalar_file)), 'a')
             scalar_f['scales/sim_time'].resize(scalar_index+1, axis=0)

@@ -46,22 +46,25 @@ if args['--times']:
 else:
     subrange = False
 
-energy_keys = ['T0', 'E0']
+energy_keys = ['E0', 'T0']
 
-fig_E, ax_E = plt.subplots()
+fig_E, ax_E = plt.subplots(nrows=2)
 for key in energy_keys:
-    ax_E.plot(t, data[key], label=key)
+    ax_E[0].plot(t, data[key], label=key)
+ax_E[1].plot(t, data['E0'], label='E0')
+
+for ax in ax_E:
+    if subrange:
+        ax.set_xlim(t_min,t_max)
+    ax.set_xlabel('time')
+    ax.set_ylabel('energy density')
+    ax.legend(loc='lower left')
+fig_E.savefig('{:s}/energies.pdf'.format(str(output_path)))
+for ax in ax_E:
+    ax.set_yscale('log')
+fig_E.savefig('{:s}/log_energies.pdf'.format(str(output_path)))
 
 i_ten = int(0.9*data['E0'].shape[0])
 print("KE benchmark {:14.12g} +- {:4.2g} (averaged from {:g}-{:g})".format(np.mean(data['E0'][i_ten:]), np.std(data['E0'][i_ten:]), t[i_ten], t[-1]))
 print("KE benchmark {:14.12g} (at t={:g})".format(np.mean(data['E0'][-1]), t[-1]))
 print("total simulation time {:6.2g}".format(t[-1]-t[0]))
-
-if subrange:
-    ax_E.set_xlim(t_min,t_max)
-ax_E.set_xlabel('time')
-ax_E.set_ylabel('energy density')
-ax_E.legend(loc='lower left')
-fig_E.savefig('{:s}/energies.pdf'.format(str(output_path)))
-ax_E.set_yscale('log')
-fig_E.savefig('{:s}/log_energies.pdf'.format(str(output_path)))
