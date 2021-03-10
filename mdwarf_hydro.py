@@ -19,6 +19,8 @@ Options:
     --benchmark                          Use benchmark initial conditions
     --ell_benchmark=<ell_benchmark>      Integer value of benchmark perturbation m=+-ell [default: 3]
 
+    --thermal_equilibrium                Start in thermal equilibrum
+
     --max_dt=<max_dt>                    Largest possible timestep [default: 0.1]
     --safety=<safety>                    CFL safety factor [default: 0.4]
 
@@ -213,6 +215,40 @@ problem.add_equation((radial(angular(e(r=radius))), 0), condition = "ntheta != 0
 problem.add_equation((τ_u, 0), condition = "ntheta == 0")
 problem.add_equation((s(r=radius), 0))
 logger.info("Problem built")
+
+if args['--thermal_equilibrium']:
+    logger.info("solving for thermal equilbrium")
+    d_eq = de.distributor.Distributor((c,), comm=MPI.COMM_SELF)
+    s_eq = de.field.Field(dist=d_eq, bases=(b,), dtype=np.float64)
+    τ_s_eq = de.field.Field(dist=d_eq, bases=(b_S2,), dtype=np.float64)
+    T_global = de.field.Field(dist=d_eq, bases=(b.radial_basis,), dtype=np.float64)
+    lnρ_global = de.field.Field(dist=d_eq, bases=(b.radial_basis,), dtype=np.float64)
+    T_global['g'] = structure['T']['g'].real
+    lnρ_global['g'] = structure['lnρ']['g'].real
+    grad_lnT_global = grad(d_log(T_global)).evaluate()
+    ρ_inv_global = d_exp(-lnρ_global).evaluate()
+    source_global = de.field.Field(dist=d_eq, bases=(b,), dtype=np.float64)
+    source_global.require_scales(L_dealias)
+    # from fits to MESA profile on r = [0,0.85]
+    σ = 0.11510794072958948
+    Q0_over_Q1 = 10.969517734412433
+    # normalization from Brown et al 2020
+    Q1 = σ**-2/(Q0_over_Q1 + 1) # normalize to σ**-2 at r=0
+    source_global['g'] = (Q0_over_Q1*np.exp(-rg**2/(2*σ**2)) + 1)*Q1
+    equilibrium = problems.LBVP([s_eq, τ_s_eq], ncc_cutoff=ncc_cutoff)
+    # ah... but I need the global ρ_inv, grad_lnT, source...
+    equilibrium.add_equation((- Ek/Pr*ρ_inv_global*(lap(s_eq)+ dot(grad_lnT_global, grad(s_eq))) + LiftTau(τ_s_eq,-1),
+                              Ek/Pr*source_global))
+    equilibrium.add_equation((s_eq(r=radius), 0))
+    eq_solver = solvers.LinearBoundaryValueSolver(equilibrium)
+    eq_solver.solve()
+    logger.info("thermal equilbrium: s['g'] = {}".format(s_eq['g']))
+    # s_eq.require_scales(3/2)
+    # s.require_scales(3/2)
+    if rank == 0:
+        s['g'] = s_eq['g']
+    # for i, r_i in enumerate(r1[0,0,:]):
+    #     s['g'][:,:,i] = s_eq(r=r_i).evaluate()['g'][:,:,0]
 
 amp = 1e-2
 if args['--benchmark']:
