@@ -181,15 +181,18 @@ grad_lnρ = grad(lnρ).evaluate()
 ρT_inv = (T_inv*ρ_inv).evaluate()
 
 # Entropy source function, inspired from MESA model
+def source_function(r):
+    # from fits to MESA profile on r = [0,0.85]
+    σ = 0.11510794072958948
+    Q0_over_Q1 = 10.969517734412433
+    # normalization from Brown et al 2020
+    Q1 = σ**-2/(Q0_over_Q1 + 1) # normalize to σ**-2 at r=0
+    logger.info("Source function: Q0/Q1 = {:}, σ = {:}, Q1 = {:}".format(Q0_over_Q1, σ, Q1))
+    return (Q0_over_Q1*np.exp(-r**2/(2*σ**2)) + 1)*Q1
+
 source = de.field.Field(dist=d, bases=(b,), dtype=np.float64)
-source.require_scales(L_dealias)
-# from fits to MESA profile on r = [0,0.85]
-σ = 0.11510794072958948
-Q0_over_Q1 = 10.969517734412433
-# normalization from Brown et al 2020
-Q1 = σ**-2/(Q0_over_Q1 + 1) # normalize to σ**-2 at r=0
-source['g'] = (Q0_over_Q1*np.exp(-r**2/(2*σ**2)) + 1)*Q1
-logger.info("Source function: Q0/Q1 = {:}, σ = {:}, Q1 = {:}".format(Q0_over_Q1, σ, Q1))
+source['g'] = source_function(r1)
+
 
 #e = 0.5*(grad(u) + trans(grad(u)))
 e = grad(u) + trans(grad(u))
@@ -229,12 +232,7 @@ if args['--thermal_equilibrium']:
     ρ_inv_global = d_exp(-lnρ_global).evaluate()
     source_global = de.field.Field(dist=d_eq, bases=(b,), dtype=np.float64)
     source_global.require_scales(L_dealias)
-    # from fits to MESA profile on r = [0,0.85]
-    σ = 0.11510794072958948
-    Q0_over_Q1 = 10.969517734412433
-    # normalization from Brown et al 2020
-    Q1 = σ**-2/(Q0_over_Q1 + 1) # normalize to σ**-2 at r=0
-    source_global['g'] = (Q0_over_Q1*np.exp(-rg**2/(2*σ**2)) + 1)*Q1
+    source_global['g'] = source_function(rg)
     equilibrium = problems.LBVP([s_eq, τ_s_eq], ncc_cutoff=ncc_cutoff)
     # ah... but I need the global ρ_inv, grad_lnT, source...
     equilibrium.add_equation((- Ek/Pr*ρ_inv_global*(lap(s_eq)+ dot(grad_lnT_global, grad(s_eq))) + LiftTau(τ_s_eq,-1),
