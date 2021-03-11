@@ -290,6 +290,12 @@ if rank == 0:
     from collections import OrderedDict
     scalar_data = OrderedDict()
 
+bulk_output = solver.evaluator.add_file_handler(data_dir+'/snapshots',sim_dt=2,max_writes=10)
+bulk_output.add_task(s, name='s')
+bulk_output.add_task(u, name='u')
+bulk_output.add_task(curl(u), name='ω')
+
+
 def vol_avg(q):
     Q = np.sum(vol_correction*weight_r*weight_theta*q['g'])
     Q *= (np.pi)/(Lmax+1)/L_dealias
