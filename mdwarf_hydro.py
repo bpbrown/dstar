@@ -299,13 +299,13 @@ main_start = time.time()
 good_solution = True
 while solver.ok and good_solution:
     if solver.iteration % energy_report_cadence == 0:
-        q = (0.5*ρ*u**2).evaluate()
+        q = (0.5*ρ*dot(u,u)).evaluate()
         E0 = vol_avg(q)
 
-        q = (curl(u)**2).evaluate()
+        q = (dot(curl(u),curl(u))).evaluate()
         Ro = np.sqrt(vol_avg(q))
 
-        q = ((ρ*u)**2).evaluate()
+        q = (dot(ρ*u,ρ*u)).evaluate()
         Re = np.sqrt(vol_avg(q))/Ek
 
         q = (ρ*T*s).evaluate()
