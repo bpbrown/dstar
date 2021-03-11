@@ -7,9 +7,9 @@ Usage:
     mdwarf_hydro.py [options]
 
 Options:
-    --Ekman=<Ekman>                      Ekman number    [default: 3e-4]
-    --ConvectiveRossbySq=<Co2>           Squared Convective Rossby = Ra*Ek**2/Pr [default: 0.3]
-    --Prandtl=<Prandtl>                  Prandtl number  [default: 1]
+    --Ekman=<Ekman>                      Ekman number    [default: 5e-5]
+    --ConvectiveRossbySq=<Co2>           Squared Convective Rossby = Ra*Ek**2/Pr [default: 7e-3]
+    --Prandtl=<Prandtl>                  Prandtl number  [default: 0.5]
     --n_rho=<n_rho>                      Density scale heights [default: 3]
 
     --L_max=<L_max>                      Max spherical harmonic [default: 30]
@@ -21,7 +21,7 @@ Options:
 
     --thermal_equilibrium                Start in thermal equilibrum
 
-    --max_dt=<max_dt>                    Largest possible timestep [default: 0.1]
+    --max_dt=<max_dt>                    Largest possible timestep [default: 0.25]
     --safety=<safety>                    CFL safety factor [default: 0.4]
 
     --run_time=<run_time>                How long to run, in rotating time units
@@ -290,10 +290,9 @@ if rank == 0:
     from collections import OrderedDict
     scalar_data = OrderedDict()
 
-bulk_output = solver.evaluator.add_file_handler(data_dir+'/snapshots',sim_dt=2,max_writes=10)
+bulk_output = solver.evaluator.add_file_handler(data_dir+'/snapshots',sim_dt=10,max_writes=10)
 bulk_output.add_task(s, name='s')
-bulk_output.add_task(u, name='u')
-bulk_output.add_task(curl(u), name='ω')
+bulk_output.add_task(dot(curl(u),curl(u)), name='enstrophy')
 
 
 def vol_avg(q):
