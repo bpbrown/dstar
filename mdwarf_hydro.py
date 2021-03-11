@@ -282,7 +282,7 @@ if rank == 0:
     scale_group = scalar_f.create_group('scales')
     scale_group.create_dataset(name='sim_time', shape=(0,), maxshape=(None,), dtype=np.float64)
     task_group = scalar_f.create_group('tasks')
-    scalar_keys = ['E0', 'T0', 'Re', 'Ro']
+    scalar_keys = ['KE', 'PE', 'Re', 'Ro']
     for key in scalar_keys:
         task_group.create_dataset(name=key, shape=(0,), maxshape=(None,), dtype=np.float64)
     scalar_index = 0
@@ -300,7 +300,7 @@ good_solution = True
 while solver.ok and good_solution:
     if solver.iteration % energy_report_cadence == 0:
         q = (0.5*ρ*dot(u,u)).evaluate()
-        E0 = vol_avg(q)
+        KE = vol_avg(q)
 
         q = (dot(curl(u),curl(u))).evaluate()
         Ro = np.sqrt(vol_avg(q))
@@ -309,14 +309,14 @@ while solver.ok and good_solution:
         Re = np.sqrt(vol_avg(q))/Ek
 
         q = (ρ*T*s).evaluate()
-        T0 = Co2*vol_avg(q)
+        PE = Co2*vol_avg(q)
 
-        logger.info("iter: {:d}, dt={:.2e}, t={:.3e}, E0={:e}, T0={:e}, Re={:.2e}, Ro={:.2e}".format(solver.iteration, dt, solver.sim_time, E0, T0, Re, Ro))
-        good_solution = np.isfinite(E0)
+        logger.info("iter: {:d}, dt={:.2e}, t={:.3e}, KE={:e}, PE={:e}, Re={:.2e}, Ro={:.2e}".format(solver.iteration, dt, solver.sim_time, KE, PE, Re, Ro))
+        good_solution = np.isfinite(KE)
 
         if rank == 0:
-            scalar_data['T0'] = T0
-            scalar_data['E0'] = E0
+            scalar_data['PE'] = PE
+            scalar_data['KE'] = KE
             scalar_data['Re'] = Re
             scalar_data['Ro'] = Ro
 
