@@ -294,7 +294,6 @@ bulk_output = solver.evaluator.add_file_handler(data_dir+'/snapshots',sim_dt=10,
 bulk_output.add_task(s, name='s')
 bulk_output.add_task(dot(curl(u),curl(u)), name='enstrophy')
 
-
 def vol_avg(q):
     Q = np.sum(vol_correction*weight_r*weight_theta*q['g'])
     Q *= (np.pi)/(Lmax+1)/L_dealias
@@ -307,6 +306,26 @@ int_test.require_scales(L_dealias)
 logger.info("vol_avg(1)={}".format(vol_avg(int_test)))
 logger.info("vol_test={}".format(vol_test))
 logger.info("vol_correction={}".format(vol_correction))
+
+
+# CFL
+dr = np.gradient(r[0,0])
+safety = float(args['--safety'])
+dt_max = float(args['--max_dt'])
+threshold = 0.1
+logger.info("max dt={:.2g}".format(dt_max))
+logger.info("dr : {}".format(dr))
+def calculate_dt(dt_old):
+  local_freq = np.abs(u['g'][2]/dr) + np.abs(u['g'][1]*(Lmax+2)) + np.abs(u['g'][0]*(Lmax+2))
+  global_freq = reducer.global_max(local_freq)
+  if global_freq == 0.:
+      dt = np.inf
+  else:
+      dt = 1 / global_freq
+  dt *= safety
+  if dt > dt_max: dt = dt_max
+  if dt < dt_old*(1+threshold) and dt > dt_old*(1-threshold): dt = dt_old
+  return dt
 
 main_start = time.time()
 good_solution = True
@@ -348,6 +367,7 @@ while solver.ok and good_solution:
         for field in solver.state:
             field['g']
     solver.step(dt)
+    dt = calculate_dt(dt)
 
 end_time = time.time()
 
