@@ -298,7 +298,15 @@ bulk_output.add_task(dot(curl(u),curl(u)), name='enstrophy')
 def vol_avg(q):
     Q = np.sum(vol_correction*weight_r*weight_theta*q['g'])
     Q *= (np.pi)/(Lmax+1)/L_dealias
+    Q /= (4/3*np.pi)
     return reducer.reduce_scalar(Q, MPI.SUM)
+
+int_test = de.field.Field(dist=d, bases=(b,), dtype=np.float64)
+int_test['g']=1
+int_test.require_scales(L_dealias)
+logger.info("vol_avg(1)={}".format(vol_avg(int_test)))
+logger.info("vol_test={}".format(vol_test))
+logger.info("vol_correction={}".format(vol_correction))
 
 main_start = time.time()
 good_solution = True
