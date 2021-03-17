@@ -17,6 +17,7 @@ Options:
     --mesh=<mesh>                        Processor mesh for 3-D runs; if not set a sensible guess will be made
 
     --benchmark                          Use benchmark initial conditions
+    --spectrum                           Use a spectrum of benchmark perturbations
     --ell_benchmark=<ell_benchmark>      Integer value of benchmark perturbation m=+-ell [default: 3]
 
     --thermal_equilibrium                Start in thermal equilibrum
@@ -232,12 +233,17 @@ if args['--thermal_equilibrium']:
     eq_solver.solve()
 
 amp = 1e-2
+s.require_scales(L_dealias)
 if args['--benchmark']:
     𝓁 = int(args['--ell_benchmark'])
     norm = 1/(2**𝓁*np.math.factorial(𝓁))*np.sqrt(np.math.factorial(2*𝓁+1)/(4*np.pi))
-    s.require_scales(L_dealias)
     s['g'] += amp*norm*r**𝓁*(1-r**2)*(np.cos(𝓁*phi)+np.sin(𝓁*phi))*np.sin(theta)**𝓁
     logger.info("benchmark run with perturbations at ell={} with norm={}".format(𝓁, norm))
+elif args['--spectrum']:
+    for 𝓁 in np.arange(int(args['--ell_benchmark'])+1):
+        norm = 1/(2**𝓁*np.math.factorial(𝓁))*np.sqrt(np.math.factorial(2*𝓁+1)/(4*np.pi))
+        s['g'] += amp*norm*r**𝓁*(1-r**2)*(np.cos(𝓁*phi)+np.sin(𝓁*phi))*np.sin(theta)**𝓁
+    logger.info("bandwide run with perturbations at ell=0--{}".format(𝓁))
 else:
     # need a noise generator
     raise NotImplementedError("noise ICs not implemented")
