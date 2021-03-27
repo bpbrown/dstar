@@ -43,7 +43,6 @@ import numpy as np
 import dedalus.public as de
 from dedalus.core import arithmetic, timesteppers, problems, solvers
 from dedalus.extras.flow_tools import GlobalArrayReducer
-from dedalus.tools.config import config
 from dedalus.tools.parallel import Sync
 
 import pathlib
@@ -61,6 +60,7 @@ import logging
 logger = logging.getLogger(__name__)
 dlog = logging.getLogger('matplotlib')
 dlog.setLevel(logging.WARNING)
+
 from structure import lane_emden
 
 comm = MPI.COMM_WORLD
@@ -100,12 +100,14 @@ logger.info("Ek = {}, Co2 = {}, Pr = {}".format(Ek,Co2,Pr))
 
 data_dir = sys.argv[0].split('.py')[0]
 data_dir += '_Ek{}_Co{}_Pr{}'.format(args['--Ekman'],args['--ConvectiveRossbySq'],args['--Prandtl'])
+data_dir += '_L{}_N{}'.format(args['--L_max'], args['--N_max'])
 if args['--benchmark']:
     data_dir += '_benchmark'
 if args['--label']:
     data_dir += '_{:s}'.format(args['--label'])
 logger.info("saving data in {}".format(data_dir))
 
+from dedalus.tools.config import config
 config['logging']['filename'] = os.path.join(data_dir,'logs/dedalus_log')
 config['logging']['file_level'] = 'DEBUG'
 with Sync() as sync:
@@ -164,6 +166,16 @@ ez.set_scales(b.dealias)
 ez['g'][1] = -np.sin(theta)
 ez['g'][2] =  np.cos(theta)
 ez_g = de.operators.Grid(ez).evaluate()
+
+r_cyl = de.field.Field(dist=d, bases=(b,), tensorsig=(c,), dtype=np.float64)
+r_cyl.set_scales(b.dealias)
+r_cyl['g'][2] =  r*np.sin(theta)
+r_cyl['g'][1] = -r*np.cos(theta)
+
+r_vec = de.field.Field(dist=d, bases=(b,), tensorsig=(c,), dtype=np.float64)
+r_vec.set_scales(b.dealias)
+r_vec['g'][2] = r
+r_vec_g = de.operators.Grid(r_vec).evaluate()
 
 structure = lane_emden(Nmax, n_rho=n_rho, m=1.5, comm=MPI.COMM_SELF)
 
@@ -240,7 +252,7 @@ if args['--benchmark']:
     s['g'] += amp*norm*r**𝓁*(1-r**2)*(np.cos(𝓁*phi)+np.sin(𝓁*phi))*np.sin(theta)**𝓁
     logger.info("benchmark run with perturbations at ell={} with norm={}".format(𝓁, norm))
 elif args['--spectrum']:
-    for 𝓁 in np.arange(int(args['--ell_benchmark'])+1):
+    for 𝓁 in np.arange(1, int(args['--ell_benchmark'])+1):
         norm = 1/(2**𝓁*np.math.factorial(𝓁))*np.sqrt(np.math.factorial(2*𝓁+1)/(4*np.pi))
         s['g'] += amp*norm*r**𝓁*(1-r**2)*(np.cos(𝓁*phi)+np.sin(𝓁*phi))*np.sin(theta)**𝓁
     logger.info("bandwide run with perturbations at ell=0--{}".format(𝓁))
@@ -288,7 +300,7 @@ if rank == 0:
     scale_group = scalar_f.create_group('scales')
     scale_group.create_dataset(name='sim_time', shape=(0,), maxshape=(None,), dtype=np.float64)
     task_group = scalar_f.create_group('tasks')
-    scalar_keys = ['KE', 'PE', 'Re', 'Ro']
+    scalar_keys = ['KE', 'PE', 'Re', 'Ro', 'Lz']
     for key in scalar_keys:
         task_group.create_dataset(name=key, shape=(0,), maxshape=(None,), dtype=np.float64)
     scalar_index = 0
@@ -296,7 +308,7 @@ if rank == 0:
     from collections import OrderedDict
     scalar_data = OrderedDict()
 
-bulk_output = solver.evaluator.add_file_handler(data_dir+'/snapshots',sim_dt=10,max_writes=10)
+bulk_output = solver.evaluator.add_file_handler(data_dir+'/snapshots',sim_dt=50,max_writes=10)
 bulk_output.add_task(s, name='s')
 bulk_output.add_task(dot(curl(u),curl(u)), name='enstrophy')
 
@@ -349,7 +361,10 @@ while solver.ok and good_solution:
         q = (ρ*T*s).evaluate()
         PE = Co2*vol_avg(q)
 
-        logger.info("iter: {:d}, dt={:.2e}, t={:.3e}, KE={:e}, PE={:e}, Re={:.2e}, Ro={:.2e}".format(solver.iteration, dt, solver.sim_time, KE, PE, Re, Ro))
+        q = (ρ*dot(cross(r_vec_g,u), ez_g)).evaluate()
+        Lz = vol_avg(q)
+
+        logger.info("iter: {:d}, dt={:.2e}, t={:.3e}, KE={:e}, PE={:e}, Re={:.2e}, Ro={:.2e}, Lz={:.2e}".format(solver.iteration, dt, solver.sim_time, KE, PE, Re, Ro, Lz))
         good_solution = np.isfinite(KE)
 
         if rank == 0:
@@ -357,6 +372,7 @@ while solver.ok and good_solution:
             scalar_data['KE'] = KE
             scalar_data['Re'] = Re
             scalar_data['Ro'] = Ro
+            scalar_data['Lz'] = Lz
 
             scalar_f = h5py.File('{:s}'.format(str(scalar_file)), 'a')
             scalar_f['scales/sim_time'].resize(scalar_index+1, axis=0)
