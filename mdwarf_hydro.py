@@ -252,10 +252,11 @@ if args['--benchmark']:
     s['g'] += amp*norm*r**𝓁*(1-r**2)*(np.cos(𝓁*phi)+np.sin(𝓁*phi))*np.sin(theta)**𝓁
     logger.info("benchmark run with perturbations at ell={} with norm={}".format(𝓁, norm))
 elif args['--spectrum']:
-    for 𝓁 in np.arange(1, int(args['--ell_benchmark'])+1):
+    𝓁_min = 1
+    for 𝓁 in np.arange(𝓁_min, int(args['--ell_benchmark'])+1):
         norm = 1/(2**𝓁*np.math.factorial(𝓁))*np.sqrt(np.math.factorial(2*𝓁+1)/(4*np.pi))
         s['g'] += amp*norm*r**𝓁*(1-r**2)*(np.cos(𝓁*phi)+np.sin(𝓁*phi))*np.sin(theta)**𝓁
-    logger.info("bandwide run with perturbations at ell=0--{}".format(𝓁))
+    logger.info("bandwide run with perturbations at ell={}--{}".format(𝓁_min, 𝓁))
 else:
     # need a noise generator
     raise NotImplementedError("noise ICs not implemented")

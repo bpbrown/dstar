@@ -64,6 +64,19 @@ for ax in ax_E:
     ax.set_yscale('log')
 fig_E.savefig('{:s}/log_energies.pdf'.format(str(output_path)))
 
+fig_L, ax_L = plt.subplots(nrows=2)
+ax_L[0].plot(t, data['Lz'], label='Lz')
+ax_L[1].plot(t, np.abs(data['Lz']), label='Lz')
+
+for ax in ax_L:
+    if subrange:
+        ax.set_xlim(t_min,t_max)
+    ax.set_xlabel('time')
+    ax.set_ylabel('Angular Momentum')
+    ax.legend(loc='lower left')
+ax_L[1].set_yscale('log')
+fig_L.savefig('{:s}/angular_momentum.pdf'.format(str(output_path)))
+
 benchmark_set = ['KE', 'Re', 'Ro']
 i_ten = int(0.9*data[benchmark_set[0]].shape[0])
 for benchmark in benchmark_set:
