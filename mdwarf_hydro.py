@@ -214,6 +214,7 @@ source['g'] = source_function(r1)
 e = grad(u) + trans(grad(u))
 e.store_last = True
 
+ω = curl(u)
 #viscous_terms = div(e) + dot(grad_lnρ, e) - 2/3*grad(div(u)) - 2/3*grad_lnρ*div(u)
 viscous_terms = div(e) - 2/3*grad(div(u))
 trace_e = trace(e)
@@ -226,6 +227,8 @@ problem = problems.IVP([u, p, s, τ_u, τ_s], ncc_cutoff=ncc_cutoff)
 #                       - dot(u, e) - cross(ez_g, u)), condition = "ntheta != 0")
 problem.add_equation((ρ*ddt(u) + ρ*grad(p) - Co2*ρ*T*grad(s) - Ek*viscous_terms + LiftTau(τ_u,-1),
                       - ρ*dot(u, e) - ρ*cross(ez_g, u)), condition = "ntheta != 0")
+#                       - ρ*cross(ω+ez,u)), condition = "ntheta != 0")
+#                      - div(ρ*u*u) - ρ*cross(ez_g, u)), condition = "ntheta != 0")
 problem.add_equation((dot(grad_lnρ, u) + div(u), 0), condition = "ntheta != 0")
 problem.add_equation((u, 0), condition = "ntheta == 0")
 problem.add_equation((p, 0), condition = "ntheta == 0")
@@ -304,7 +307,7 @@ if rank == 0:
     scale_group = scalar_f.create_group('scales')
     scale_group.create_dataset(name='sim_time', shape=(0,), maxshape=(None,), dtype=np.float64)
     task_group = scalar_f.create_group('tasks')
-    scalar_keys = ['KE', 'PE', 'Re', 'Ro', 'Lz']
+    scalar_keys = ['KE', 'PE', 'Re', 'Ro', 'Lz', 'τ_u2', 'τ_s2']
     for key in scalar_keys:
         task_group.create_dataset(name=key, shape=(0,), maxshape=(None,), dtype=np.float64)
     scalar_index = 0
@@ -321,6 +324,14 @@ def vol_avg(q):
     Q *= (np.pi)/(Lmax+1)/L_dealias
     Q /= (4/3*np.pi)
     return reducer.reduce_scalar(Q, MPI.SUM)
+
+def L_inf(q):
+    if q['g'].size == 0:
+        Q = 0
+    else:
+        Q = np.max(np.abs(q['g']))
+    return reducer.reduce_scalar(Q, MPI.MAX)
+
 
 int_test = de.field.Field(dist=d, bases=(b,), dtype=np.float64)
 int_test['g']=1
@@ -368,7 +379,10 @@ while solver.ok and good_solution:
         q = (ρ*dot(cross(r_vec_g,u), ez_g)).evaluate()
         Lz = vol_avg(q)
 
-        logger.info("iter: {:d}, dt={:.2e}, t={:.3e}, KE={:e}, PE={:e}, Re={:.2e}, Ro={:.2e}, Lz={:.2e}".format(solver.iteration, dt, solver.sim_time, KE, PE, Re, Ro, Lz))
+        τ_u2 = L_inf(τ_u)
+        τ_s2 = L_inf(τ_s)
+
+        logger.info("iter: {:d}, dt={:.2e}, t={:.3e}, KE={:.2e}, PE={:.2e}, Re={:.2e}, Ro={:.2e}, Lz={:.2e}, taus=({:.2e},{:.2e})".format(solver.iteration, dt, solver.sim_time, KE, PE, Re, Ro, Lz,τ_u2,τ_s2))
         good_solution = np.isfinite(KE)
 
         if rank == 0:
@@ -377,6 +391,8 @@ while solver.ok and good_solution:
             scalar_data['Re'] = Re
             scalar_data['Ro'] = Ro
             scalar_data['Lz'] = Lz
+            scalar_data['τ_u2'] = τ_u2
+            scalar_data['τ_s2'] = τ_s2
 
             scalar_f = h5py.File('{:s}'.format(str(scalar_file)), 'a')
             scalar_f['scales/sim_time'].resize(scalar_index+1, axis=0)
