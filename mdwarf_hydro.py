@@ -214,15 +214,18 @@ source['g'] = source_function(r1)
 e = grad(u) + trans(grad(u))
 e.store_last = True
 
-viscous_terms = div(e) + dot(grad_lnρ, e) - 2/3*grad(div(u)) - 2/3*grad_lnρ*div(u)
+#viscous_terms = div(e) + dot(grad_lnρ, e) - 2/3*grad(div(u)) - 2/3*grad_lnρ*div(u)
+viscous_terms = div(e) - 2/3*grad(div(u))
 trace_e = trace(e)
 trace_e.store_last = True
 Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
 #Problem
 problem = problems.IVP([u, p, s, τ_u, τ_s], ncc_cutoff=ncc_cutoff)
-problem.add_equation((ddt(u) + grad(p) - Co2*T*grad(s) - Ek*ρ_inv*viscous_terms + LiftTau(τ_u,-1),
-                      - dot(u, e) - cross(ez_g, u)), condition = "ntheta != 0")
+# problem.add_equation((ddt(u) + grad(p) - Co2*T*grad(s) - Ek*ρ_inv*viscous_terms + LiftTau(τ_u,-1),
+#                       - dot(u, e) - cross(ez_g, u)), condition = "ntheta != 0")
+problem.add_equation((ρ*ddt(u) + ρ*grad(p) - Co2*ρ*T*grad(s) - Ek*viscous_terms + LiftTau(τ_u,-1),
+                      - ρ*dot(u, e) - ρ*cross(ez_g, u)), condition = "ntheta != 0")
 problem.add_equation((dot(grad_lnρ, u) + div(u), 0), condition = "ntheta != 0")
 problem.add_equation((u, 0), condition = "ntheta == 0")
 problem.add_equation((p, 0), condition = "ntheta == 0")
@@ -267,7 +270,7 @@ solver = solvers.InitialValueSolver(problem, timesteppers.SBDF2)
 
 reducer = GlobalArrayReducer(d.comm_cart)
 weight_theta = b.local_colatitude_weights(3/2)
-weight_r = b.radial_basis.local_weights(3/2)*r**2
+weight_r = b.local_radial_weights(3/2)
 vol_test = np.sum(weight_r*weight_theta+0*s['g'])*np.pi/(Lmax+1)/L_dealias
 vol_test = reducer.reduce_scalar(vol_test, MPI.SUM)
 vol = 4*np.pi/3*(radius)
