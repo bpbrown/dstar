@@ -64,6 +64,21 @@ for ax in ax_E:
     ax.set_yscale('log')
 fig_E.savefig('{:s}/log_energies.pdf'.format(str(output_path)))
 
+fig_tau, ax_tau = plt.subplots(nrows=2)
+ax_tau[0].plot(t, data['τ_u2'], label=r'$\tau_u$')
+ax_tau[0].plot(t, data['τ_s2'], label=r'$\tau_s$')
+ax_tau[1].plot(t, data['τ_u2'], label=r'$\tau_u$')
+ax_tau[1].plot(t, data['τ_s2'], label=r'$\tau_s$')
+
+for ax in ax_tau:
+    if subrange:
+        ax.set_xlim(t_min,t_max)
+    ax.set_xlabel('time')
+    ax.set_ylabel(r'$L_\inf(\tau)$')
+    ax.legend(loc='lower left')
+ax_tau[1].set_yscale('log')
+fig_tau.savefig('{:s}/tau_error.pdf'.format(str(output_path)))
+
 fig_L, ax_L = plt.subplots(nrows=2)
 ax_L[0].plot(t, data['Lz'], label='Lz')
 ax_L[1].plot(t, np.abs(data['Lz']), label='Lz')
