@@ -223,10 +223,10 @@ Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
 #Problem
 problem = problems.IVP([u, p, s, τ_u, τ_s], ncc_cutoff=ncc_cutoff)
-# problem.add_equation((ddt(u) + grad(p) - Co2*T*grad(s) - Ek*ρ_inv*viscous_terms + LiftTau(τ_u,-1),
-#                       - dot(u, e) - cross(ez_g, u)), condition = "ntheta != 0")
-problem.add_equation((ρ*ddt(u) + ρ*grad(p) - Co2*ρ*T*grad(s) - Ek*viscous_terms + LiftTau(τ_u,-1),
-                      - ρ*dot(u, e) - ρ*cross(ez_g, u)), condition = "ntheta != 0")
+problem.add_equation((ddt(u) + grad(p) - Co2*T*grad(s) - Ek*ρ_inv*viscous_terms + LiftTau(τ_u,-1),
+                       - dot(u, e) - cross(ez_g, u)), condition = "ntheta != 0")
+#problem.add_equation((ρ*ddt(u) + ρ*grad(p) - Co2*ρ*T*grad(s) - Ek*viscous_terms + LiftTau(τ_u,-1),
+#                      - ρ*dot(u, e) - ρ*cross(ez_g, u)), condition = "ntheta != 0")
 #                       - ρ*cross(ω+ez,u)), condition = "ntheta != 0")
 #                      - div(ρ*u*u) - ρ*cross(ez_g, u)), condition = "ntheta != 0")
 problem.add_equation((dot(grad_lnρ, u) + div(u), 0), condition = "ntheta != 0")
@@ -244,8 +244,8 @@ logger.info("Problem built")
 if args['--thermal_equilibrium']:
     logger.info("solving for thermal equilbrium")
     equilibrium = problems.LBVP([s, τ_s], ncc_cutoff=ncc_cutoff)
-    equilibrium.add_equation((- Ek/Pr*ρ_inv*(lap(s)+ dot(grad_lnT, grad(s))) + LiftTau(τ_s,-1),
-                              Ek/Pr*source))
+    equilibrium.add_equation((-(lap(s)+ dot(grad_lnT, grad(s))) + LiftTau(τ_s,-1),
+                              ρ*source))
     equilibrium.add_equation((s(r=radius), 0))
     eq_solver = solvers.LinearBoundaryValueSolver(equilibrium)
     eq_solver.solve()
@@ -270,6 +270,7 @@ else:
 
 # Solver
 solver = solvers.InitialValueSolver(problem, timesteppers.SBDF2)
+timestepper_history = [0,1]
 
 reducer = GlobalArrayReducer(d.comm_cart)
 weight_theta = b.local_colatitude_weights(3/2)
@@ -281,10 +282,9 @@ vol_correction = vol/vol_test
 
 logger.info(vol)
 
-report_cadence = 100
-energy_report_cadence = 100
+energy_report_cadence  = report_cadence = 100
 dt = float(args['--max_dt'])
-timestepper_history = [0,1]
+
 hermitian_cadence = 100
 
 solver.stop_iteration = niter
