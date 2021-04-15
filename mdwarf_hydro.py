@@ -222,7 +222,7 @@ trace_e.store_last = True
 Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
 #Problem
-problem = problems.IVP([u, p, s, τ_u, τ_s], ncc_cutoff=ncc_cutoff)
+problem = problems.IVP([u, p, s, τ_u, τ_s])
 problem.add_equation((ddt(u) + grad(p) - Co2*T*grad(s) - Ek*ρ_inv*viscous_terms + LiftTau(τ_u,-1),
                        - dot(u, e) - cross(ez_g, u)), condition = "ntheta != 0")
 #problem.add_equation((ρ*ddt(u) + ρ*grad(p) - Co2*ρ*T*grad(s) - Ek*viscous_terms + LiftTau(τ_u,-1),
@@ -243,11 +243,11 @@ logger.info("Problem built")
 
 if args['--thermal_equilibrium']:
     logger.info("solving for thermal equilbrium")
-    equilibrium = problems.LBVP([s, τ_s], ncc_cutoff=ncc_cutoff)
+    equilibrium = problems.LBVP([s, τ_s])
     equilibrium.add_equation((-(lap(s)+ dot(grad_lnT, grad(s))) + LiftTau(τ_s,-1),
                               ρ*source))
     equilibrium.add_equation((s(r=radius), 0))
-    eq_solver = solvers.LinearBoundaryValueSolver(equilibrium)
+    eq_solver = solvers.LinearBoundaryValueSolver(equilibrium, ncc_cutoff=ncc_cutoff)
     eq_solver.solve()
 
 amp = 1e-2
@@ -269,7 +269,7 @@ else:
     s['g'] += amp*noise
 
 # Solver
-solver = solvers.InitialValueSolver(problem, timesteppers.SBDF2)
+solver = solvers.InitialValueSolver(problem, timesteppers.SBDF2, ncc_cutoff=ncc_cutoff)
 timestepper_history = [0,1]
 
 reducer = GlobalArrayReducer(d.comm_cart)

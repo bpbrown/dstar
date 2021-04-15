@@ -18,13 +18,13 @@ def lane_emden(Nmax, Lmax=0, m=1.5, n_rho=3, radius=1,
     lap = lambda A: operators.Laplacian(A, c)
     Pow = lambda A,n: operators.Power(A,n)
     LiftTau = lambda A: operators.LiftTau(A, br, -1)
-    problem = problems.NLBVP([f, R, τ], ncc_cutoff=ncc_cutoff)
+    problem = problems.NLBVP([f, R, τ])
     problem.add_equation((lap(f) + LiftTau(τ), - R**2 * Pow(f,m)))
     problem.add_equation((f(r=0), 1))
     problem.add_equation((f(r=radius), np.exp(-n_rho/m, dtype=dtype))) # explicit typing to match domain
 
     # Solver
-    solver = solvers.NonlinearBoundaryValueSolver(problem)
+    solver = solvers.NonlinearBoundaryValueSolver(problem, ncc_cutoff=ncc_cutoff)
     # Initial guess
     f['g'] = np.cos(np.pi/2 * r)**2
     R['g'] = 5
