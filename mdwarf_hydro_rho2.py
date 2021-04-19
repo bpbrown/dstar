@@ -137,11 +137,11 @@ phi, theta, r = b.local_grids((L_dealias,L_dealias,N_dealias))
 phig,thetag,rg= b.global_grids((L_dealias,L_dealias,N_dealias))
 theta_target = thetag[0,(Lmax+1)//2,0]
 
-u = de.field.Field(dist=d, bases=(b,), tensorsig=(c,), dtype=np.float64, name='u')
-p = de.field.Field(dist=d, bases=(b,), dtype=np.float64, name='p')
-s = de.field.Field(dist=d, bases=(b,), dtype=np.float64, name='s')
-τ_u = de.field.Field(dist=d, bases=(b_S2,), tensorsig=(c,), dtype=np.float64, name='τ_u')
-τ_s = de.field.Field(dist=d, bases=(b_S2,), dtype=np.float64, name='τ_s')
+u = de.field.Field(name='u', dist=d, bases=(b,), tensorsig=(c,), dtype=np.float64)
+p = de.field.Field(name='p', dist=d, bases=(b,), dtype=np.float64)
+s = de.field.Field(name='s', dist=d, bases=(b,), dtype=np.float64)
+τ_u = de.field.Field(name='τ_u', dist=d, bases=(b_S2,), tensorsig=(c,), dtype=np.float64)
+τ_s = de.field.Field(name='τ_s', dist=d, bases=(b_S2,), dtype=np.float64)
 
 # Parameters and operators
 div = lambda A: de.operators.Divergence(A, index=0)
@@ -252,14 +252,87 @@ if args['--thermal_equilibrium']:
     eq_solver = solvers.LinearBoundaryValueSolver(equilibrium, ncc_cutoff=ncc_cutoff)
     eq_solver.solve()
 
+# Solver
+solver = solvers.InitialValueSolver(problem, timesteppers.SBDF2, ncc_cutoff=ncc_cutoff)
+timestepper_history = [0,1]
+
+def load_state(solver, path, index=-1):
+    """
+    Load state from HDF5 file.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Path to Dedalus HDF5 savefile
+    index : int, optional
+        Local write index (within file) to load (default: -1)
+
+    Returns
+    -------
+    write : int
+        Global write number of loaded write
+    dt : float
+        Timestep at loaded write
+    """
+    path = pathlib.Path(path)
+    logger.info("Loading solver state from: {}".format(path))
+    with h5py.File(str(path), mode='r') as file:
+        # Load solver attributes
+        write = file['scales']['write_number'][index]
+        try:
+            dt = file['scales']['timestep'][index]
+        except KeyError:
+            dt = None
+        solver.iteration = solver.initial_iteration = file['scales']['iteration'][index]
+        solver.sim_time = solver.initial_sim_time = file['scales']['sim_time'][index]
+        # Log restart info
+        logger.info("Loading iteration: {}".format(solver.iteration))
+        logger.info("Loading write: {}".format(write))
+        logger.info("Loading sim time: {}".format(solver.sim_time))
+        logger.info("Loading timestep: {}".format(dt))
+        # Load fields
+        for field in solver.state:
+            # assumes named fields in hdf5 file
+            dset = file['tasks'][field.name]
+            # Find matching layout
+            for layout in solver.dist.layouts:
+                if np.allclose(layout.grid_space, dset.attrs['grid_space']):
+                    break
+            else:
+                raise ValueError("No matching layout")
+            # Set scales to match saved data
+            scales = np.array(dset.shape[2:]) / np.array(layout.global_shape(field.domain,1))
+            scales[~layout.grid_space] = 1
+            # Extract local data from global dset
+            # this line is missing the tensorsig info
+            #dset_slices = (index,) + layout.slices(field.domain, tuple(scales))[0]
+            local_slices = tuple(slice(None) for cs in field.tensorsig) + tuple(field.layout.slices(field.domain, scales))
+            dset_slices = (index,) + local_slices
+            logger.info(dset)
+            #logger.info(dset_slices)
+            #logger.info(dset[-1,:,layout.slices(field.domain, tuple(scales))[0]])
+            logger.info(dset_slices)
+            logger.info(dset[dset_slices])
+            local_dset = dset[dset_slices]
+            # Copy to field
+            field_slices = tuple(slice(n) for n in local_dset.shape)
+            field.require_scales(scales)
+            field[layout][field_slices] = local_dset
+            field.require_scales(solver.domain.dealias)
+    return write, dt
+
+
 amp = 1e-2
-s.require_scales(L_dealias)
-if args['--benchmark']:
+if args['--restart']:
+    write, dt = load_state(solver, args['--restart'])
+elif args['--benchmark']:
+    s.require_scales(L_dealias)
     𝓁 = int(args['--ell_benchmark'])
     norm = 1/(2**𝓁*np.math.factorial(𝓁))*np.sqrt(np.math.factorial(2*𝓁+1)/(4*np.pi))
     s['g'] += amp*norm*r**𝓁*(1-r**2)*(np.cos(𝓁*phi)+np.sin(𝓁*phi))*np.sin(theta)**𝓁
     logger.info("benchmark run with perturbations at ell={} with norm={}".format(𝓁, norm))
 elif args['--spectrum']:
+    s.require_scales(L_dealias)
     𝓁_min = 1
     for 𝓁 in np.arange(𝓁_min, int(args['--ell_benchmark'])+1):
         norm = 1/(2**𝓁*np.math.factorial(𝓁))*np.sqrt(np.math.factorial(2*𝓁+1)/(4*np.pi))
@@ -270,9 +343,6 @@ else:
     raise NotImplementedError("noise ICs not implemented")
     s['g'] += amp*noise
 
-# Solver
-solver = solvers.InitialValueSolver(problem, timesteppers.SBDF2, ncc_cutoff=ncc_cutoff)
-timestepper_history = [0,1]
 
 for field in solver.state:
     logger.info(field)
