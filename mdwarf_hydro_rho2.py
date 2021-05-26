@@ -224,23 +224,17 @@ Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
 #Problem
 problem = problems.IVP([u, p, s, τ_u, τ_s])
-#problem.add_equation((ddt(u) + grad(p) - Co2*T*grad(s) - Ek*ρ_inv*viscous_terms + LiftTau(τ_u,-1),
-#                       - dot(u, e) - cross(ez_g, u)), condition = "ntheta != 0")
 problem.add_equation((ρ*ddt(u) + ρ*grad(p) - Co2*ρ*T*grad(s) - Ek*viscous_terms + LiftTau(τ_u,-1),
-                      - ρ*dot(u, e) - ρ*cross(ez_g, u)), condition = "ntheta != 0")
+                      - ρ*dot(u, e) - ρ*cross(ez_g, u)))
 #                       - ρ*cross(ω+ez,u)), condition = "ntheta != 0")
 #                      - div(ρ*u*u) - ρ*cross(ez_g, u)), condition = "ntheta != 0")
-problem.add_equation((dot(grad_lnρ, u) + div(u), 0), condition = "ntheta != 0")
-problem.add_equation((u, 0), condition = "ntheta == 0")
-problem.add_equation((p, 0), condition = "ntheta == 0")
-#problem.add_equation((ddt(s) - Ek/Pr*ρ_inv*(lap(s)+ dot(grad_lnT, grad(s))) + LiftTau(τ_s,-1),
-#                     - dot(u, grad(s)) + Ek/Pr*source + 1/2*Ek/Co2*ρT_inv*Phi))
+problem.add_equation((dot(grad_lnρ, u) + div(u), 0))
 problem.add_equation((ρ*ddt(s) - Ek/Pr*(lap(s)+ dot(grad_lnT, grad(s))) + LiftTau(τ_s,-1),
-                     - ρ*dot(u, grad(s)) + Ek/Pr*ρ*source + 1/2*Ek/Co2*T_inv*Phi))
+                      - ρ*dot(u, grad(s)) + Ek/Pr*ρ*source + 1/2*Ek/Co2*T_inv*Phi))
 # Boundary conditions
 problem.add_equation((radial(u(r=radius)), 0), condition = "ntheta != 0")
 problem.add_equation((radial(angular(e(r=radius))), 0), condition = "ntheta != 0")
-problem.add_equation((τ_u, 0), condition = "ntheta == 0")
+problem.add_equation((p(r=radius), 0), condition = "ntheta == 0")
 problem.add_equation((s(r=radius), 0))
 logger.info("Problem built")
 
