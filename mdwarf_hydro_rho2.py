@@ -451,24 +451,22 @@ def calculate_dt(dt_old):
   if dt < dt_old*(1+threshold) and dt > dt_old*(1-threshold): dt = dt_old
   return dt
 
+q_KE = 0.5*ρ*dot(u,u)
+q_Ro = dot(curl(u),curl(u))
+q_Re = dot(ρ*u,ρ*u)
+q_PE = ρ*T*s
+q_Lz = ρ*dot(cross(r_vec_g,u), ez_g)
+
 main_start = time.time()
 good_solution = True
 while solver.ok and good_solution:
     if solver.iteration % energy_report_cadence == 0:
-        q = (0.5*ρ*dot(u,u)).evaluate()
-        KE = vol_avg(q)
 
-        q = (dot(curl(u),curl(u))).evaluate()
-        Ro = np.sqrt(vol_avg(q))
-
-        q = (dot(ρ*u,ρ*u)).evaluate()
-        Re = np.sqrt(vol_avg(q))/Ek
-
-        q = (ρ*T*s).evaluate()
-        PE = Co2*vol_avg(q)
-
-        q = (ρ*dot(cross(r_vec_g,u), ez_g)).evaluate()
-        Lz = vol_avg(q)
+        KE = vol_avg(q_KE.evaluate())
+        Ro = np.sqrt(vol_avg(q_Ro.evaluate()))
+        Re = np.sqrt(vol_avg(q_Re.evaluate()))/Ek
+        PE = Co2*vol_avg(q_PE.evaluate())
+        Lz = vol_avg(q_Lz.evaluate())
 
         τ_u2 = L_inf(τ_u)
         τ_s2 = L_inf(τ_s)
