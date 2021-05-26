@@ -14,6 +14,7 @@ Options:
 
     --L_max=<L_max>                      Max spherical harmonic [default: 30]
     --N_max=<N_max>                      Max radial polynomial  [default: 31]
+    --dealias=<dealias>                  Degree of deailising   [default: 1.5]
     --mesh=<mesh>                        Processor mesh for 3-D runs; if not set a sensible guess will be made
 
     --benchmark                          Use benchmark initial conditions
@@ -124,8 +125,8 @@ if Lmax % 2 == 1:
 else:
     nm = 2*(Lmax+2)
 
-L_dealias = 3/2
-N_dealias = 3/2
+L_dealias = float(args['--dealias'])
+N_dealias = float(args['--dealias'])
 
 start_time = time.time()
 c = de.coords.SphericalCoordinates('phi', 'theta', 'r')
@@ -243,6 +244,10 @@ problem.add_equation((τ_u, 0), condition = "ntheta == 0")
 problem.add_equation((s(r=radius), 0))
 logger.info("Problem built")
 
+logger.info("NCC expansions:")
+for ncc in [ρ, grad_lnρ, T, (T*ρ).evaluate()]:
+    logger.info("{}: {}".format(ncc, np.where(np.abs(ncc['c']) >= ncc_cutoff)[0].shape))
+
 if args['--thermal_equilibrium']:
     logger.info("solving for thermal equilbrium")
     equilibrium = problems.LBVP([s, τ_s])
@@ -306,6 +311,13 @@ def load_state(solver, path, index=-1):
             # Extract local data from global dset
             # this line is missing the tensorsig info
             #dset_slices = (index,) + layout.slices(field.domain, tuple(scales))[0]
+
+            # old slicing
+            start = self.start(scales)
+            local_shape = self.local_shape(scales)
+            return tuple(slice(s, s+l) for (s, l) in zip(start, local_shape))
+
+            # re-produces field internal variable, that's not currently stored.  Store instead.
             local_slices = tuple(slice(None) for cs in field.tensorsig) + tuple(field.layout.slices(field.domain, scales))
             dset_slices = (index,) + local_slices
             logger.info(dset)
@@ -348,8 +360,8 @@ for field in solver.state:
     logger.info(field)
 
 reducer = GlobalArrayReducer(d.comm_cart)
-weight_theta = b.local_colatitude_weights(3/2)
-weight_r = b.local_radial_weights(3/2)
+weight_theta = b.local_colatitude_weights(L_dealias)
+weight_r = b.local_radial_weights(N_dealias)
 vol_test = np.sum(weight_r*weight_theta+0*s['g'])*np.pi/(Lmax+1)/L_dealias
 vol_test = reducer.reduce_scalar(vol_test, MPI.SUM)
 vol = 4*np.pi/3*(radius)
@@ -462,7 +474,7 @@ while solver.ok and good_solution:
         τ_s2 = L_inf(τ_s)
 
         logger.info("iter: {:d}, dt={:.2e}, t={:.3e}, KE={:.2e}, PE={:.2e}, Re={:.2e}, Ro={:.2e}, Lz={:.2e}, taus=({:.2e},{:.2e})".format(solver.iteration, dt, solver.sim_time, KE, PE, Re, Ro, Lz,τ_u2,τ_s2))
-        good_solution = np.isfinite(KE)
+        good_solution = np.isfinite(KE) and max(τ_u2, τ_s2) < 1e2
 
         if rank == 0:
             scalar_data['PE'] = PE
