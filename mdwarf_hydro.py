@@ -233,16 +233,19 @@ problem.add_equation((s(r=radius), 0))
 logger.info("Problem built")
 
 logger.info("NCC expansions:")
-for ncc in [ρ, grad_lnρ, T, (T*ρ).evaluate()]:
+for ncc in [ρ, grad_lnρ, grad_lnT, (T*ρ).evaluate()]:
+    logger.info("{}: {}".format(ncc, np.where(np.abs(ncc['c']) >= ncc_cutoff)[0].shape))
+logger.info("possible bandwidth improved NCC expansions:")
+for ncc in [ρ, T, (T*grad_lnρ).evaluate(), (T*grad_lnT).evaluate(), (T*ρ).evaluate()]:
     logger.info("{}: {}".format(ncc, np.where(np.abs(ncc['c']) >= ncc_cutoff)[0].shape))
 
 if args['--thermal_equilibrium']:
     logger.info("solving for thermal equilbrium")
-    equilibrium = problems.LBVP([s, τ_s])
+    equilibrium = de.LBVP([s, τ_s])
     equilibrium.add_equation((-(lap(s)+ dot(grad_lnT, grad(s))) + lift(τ_s,-1),
                               ρ*source))
     equilibrium.add_equation((s(r=radius), 0))
-    eq_solver = solvers.LinearBoundaryValueSolver(equilibrium, ncc_cutoff=ncc_cutoff)
+    eq_solver = equilibrium.build_solver(ncc_cutoff=ncc_cutoff)
     eq_solver.solve()
 
 # Solver
@@ -328,12 +331,12 @@ while solver.proceed and good_solution:
         Ro_avg = flow.volume_integral('Ro')/vol
         PE_avg = flow.volume_integral('PE')/vol
         Lz_avg = flow.volume_integral('Lz')/vol
-        τ_u_m = flow.max('|τ_u|')
-        τ_s_m = flow.max('|τ_s|')
+        max_τ = np.max([flow.max('|τ_u|'), flow.max('|τ_s|'), flow.max('|τ_p|')])
+
         log_string = "iter: {:d}, dt={:.1e}, t={:.3e} ({:.2e})".format(solver.iteration, dt, solver.sim_time, solver.sim_time*Ek)
         log_string += ", KE={:.2e} ({:.6e}), PE={:.2e}".format(KE_avg, E0, PE_avg)
         log_string += ", Re={:.1e}, Ro={:.1e}".format(Re_avg, Ro_avg)
-        log_string += ", Lz={:.1e}, τ=({:.1e},{:.1e})".format(Lz_avg, τ_u_m, τ_s_m)
+        log_string += ", Lz={:.1e}, τ={:.1e}".format(Lz_avg, max_τ)
         logger.info(log_string)
         good_solution = np.isfinite(E0)
     solver.step(dt)
