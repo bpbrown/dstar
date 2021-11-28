@@ -180,12 +180,13 @@ lnρ = d.Field(name='lnρ', bases=b.radial_basis)
 ρT_inv = d.Field(name='ρT_inv', bases=b)
 
 if T['g'].size > 0 :
+    # TO-DO: clean this up and make work for lane-emden solve in np.float64 rather than np.complex128
     for i, r_i in enumerate(r[0,0,:]):
-         T['g'][:,:,i] = structure['T'](r=r_i).evaluate()['g']
-         lnρ['g'][:,:,i] = structure['lnρ'](r=r_i).evaluate()['g']
+         T['g'][:,:,i] = structure['T'](r=r_i).evaluate()['g'].real
+         lnρ['g'][:,:,i] = structure['lnρ'](r=r_i).evaluate()['g'].real
 
 lnT = np.log(T).evaluate()
-T_inv = power(T,-1).evaluate()
+T_inv = (1/T).evaluate()
 grad_lnT = grad(lnT).evaluate()
 ρ = np.exp(lnρ).evaluate()
 grad_lnρ = grad(lnρ).evaluate()
@@ -218,7 +219,7 @@ trace_e.store_last = True
 Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
 #Problem
-problem = problems.IVP([u, p, s, τ_u, τ_p, τ_s])
+problem = de.IVP([u, p, s, τ_u, τ_p, τ_s])
 problem.add_equation((ρ*ddt(u) + ρ*grad(p) - Co2*ρ*T*grad(s) - Ek*viscous_terms + lift(τ_u,-1),
                       - ρ*dot(u, e) - ρ*cross(ez_g, u)))
 problem.add_equation((dot(grad_lnρ, u) + div(u) + τ_p, 0))
@@ -302,10 +303,7 @@ flow.add_property(np.abs(τ_s), name='|τ_s|')
 flow.add_property(np.abs(τ_p), name='|τ_p|')
 
 max_dt = float(args['--max_dt'])
-if args['--fixed_dt']:
-    dt = max_dt
-else:
-    dt = max_dt/10
+dt = max_dt/10
 if not args['--restart']:
     mode = 'overwrite'
 else:
@@ -313,7 +311,7 @@ else:
     mode = 'append'
 
 # CFL
-fl_safety_factor = float(args['--safety'])
+cfl_safety_factor = float(args['--safety'])
 CFL = flow_tools.CFL(solver, initial_dt=dt, cadence=1, safety=cfl_safety_factor, max_dt=max_dt, threshold=0.1)
 CFL.add_velocity(u)
 
@@ -323,8 +321,6 @@ vol = 4*np.pi/3
 while solver.proceed and good_solution:
     if solver.iteration == startup_iter:
         main_start = time.time()
-    if not args['--fixed_dt']:
-        dt = CFL.compute_timestep()
     if solver.iteration % report_cadence == 0 and solver.iteration > 0:
         KE_avg = flow.volume_integral('KE')/vol # volume average needs a defined volume
         E0 = flow.volume_integral('KE')/Ek**2 # integral rather than avg
