@@ -1,45 +1,48 @@
 import numpy as np
-from dedalus.core import coords, distributor, basis, field, operators, problems, solvers, timesteppers, arithmetic
-from dedalus.tools.cache import CachedFunction
-from dedalus.tools import logging
+import dedalus.public as de
 
-def lane_emden(Nmax, Lmax=0, m=1.5, n_rho=3, radius=1,
+import logging
+logger = logging.getLogger(__name__)
+dlog = logging.getLogger('subsystems')
+dlog.setLevel(logging.WARNING)
+
+def lane_emden(Nr, m=1.5, n_rho=3, radius=1,
                ncc_cutoff = 1e-10, tolerance = 1e-10, dtype=np.complex128, comm=None):
-    c = coords.SphericalCoordinates('phi', 'theta', 'r')
-    d = distributor.Distributor((c,), comm=comm)
-    b = basis.BallBasis(c, (1, 1, Nmax+1), radius=radius, dtype=dtype)
+    # TO-DO: clean this up and make work for ncc ingestion in main script in np.float64 rather than np.complex128
+    c = de.SphericalCoordinates('phi', 'theta', 'r')
+    d = de.Distributor((c,), comm=comm, dtype=dtype)
+    b = de.BallBasis(c, (1, 1, Nr), radius=radius, dtype=dtype)
     br = b.radial_basis
-    phi, theta, r = b.local_grids((1, 1, 1))
+    phi, theta, r = b.local_grids()
     # Fields
-    f = field.Field(dist=d, bases=(br,), dtype=dtype, name='f')
-    R = field.Field(dist=d, dtype=dtype, name='R')
-    τ = field.Field(dist=d, dtype=dtype, name='τ')
+    f = d.Field(name='f', bases=b)
+    R = d.Field(name='R')
+    τ = d.Field(name='τ', bases=b.S2_basis(radius=radius))
     # Parameters and operators
-    lap = lambda A: operators.Laplacian(A, c)
-    Pow = lambda A,n: operators.Power(A,n)
-    LiftTau = lambda A: operators.LiftTau(A, br, -1)
-    problem = problems.NLBVP([f, R, τ])
-    problem.add_equation((lap(f) + LiftTau(τ), - R**2 * Pow(f,m)))
+    lap = lambda A: de.Laplacian(A, c)
+    lift_basis = b.clone_with(k=2) # match laplacian
+    lift = lambda A: de.LiftTau(A, lift_basis, -1)
+    problem = de.NLBVP([f, R, τ])
+    problem.add_equation((lap(f) + lift(τ), - R**2 * f**m))
     problem.add_equation((f(r=0), 1))
     problem.add_equation((f(r=radius), np.exp(-n_rho/m, dtype=dtype))) # explicit typing to match domain
 
     # Solver
-    solver = solvers.NonlinearBoundaryValueSolver(problem, ncc_cutoff=ncc_cutoff)
+    solver = problem.build_solver(ncc_cutoff=ncc_cutoff)
     # Initial guess
     f['g'] = np.cos(np.pi/2 * r)**2
     R['g'] = 5
 
     # Iterations
-    def error(perts):
-        return np.sum([np.sum(np.abs(pert['c'])) for pert in perts])
-    err = np.inf
-    while err > tolerance:
+    logger.debug('beginning Lane-Emden NLBVP iterations')
+    pert_norm = np.inf
+    while pert_norm > tolerance:
         solver.newton_iteration()
-        err = error(solver.perturbations)
-
-    T = field.Field(dist=d, bases=(br,), dtype=dtype, name='f')
-    ρ = field.Field(dist=d, bases=(br,), dtype=dtype, name='f')
-    lnρ = field.Field(dist=d, bases=(br,), dtype=dtype, name='f')
+        pert_norm = sum(pert.allreduce_data_norm('c', 2) for pert in solver.perturbations)
+        logger.debug(f'Perturbation norm: {pert_norm:.3e}')
+    T = d.Field(name='T', bases=br)
+    ρ = d.Field(name='ρ', bases=br)
+    lnρ = d.Field(name='lnρ', bases=br)
     T['g'] = f['g']
     ρ['g'] = f['g']**m
     lnρ['g'] = np.log(ρ['g'])
@@ -52,9 +55,6 @@ def lane_emden(Nmax, Lmax=0, m=1.5, n_rho=3, radius=1,
     return structure
 
 if __name__=="__main__":
-    import logging
-    logger = logging.getLogger(__name__)
-
-    LE = lane_emden(63)
-    print(LE['T']['g'])
-    print(LE['lnρ']['g'])
+    LE = lane_emden(64, dtype=np.float64)
+    logger.info('T: \n {}'.format(LE['T']['g']))
+    logger.info('lnρ: \n {}'.format(LE['lnρ']['g']))
