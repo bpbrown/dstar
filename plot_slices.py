@@ -109,16 +109,16 @@ if __name__ == "__main__":
                     phi = task.dims[1][0][:]
                     theta = task.dims[2][0][:]
                     r = task.dims[3][0][:]
-                    i_eq = np.argmin(theta-np.pi/2)
-                    eq_slice = np.squeeze(task[:,:,i_eq,:])
+                    data_slices = (k, slice(None), 0, slice(None))
+                    eq_slice = task[data_slices]
                     if field == 's':
                         cmap = 'RdYlBu_r'
                         if args['--remove_m0']:
                             center_zero = True
-                            eq_slice -= np.mean(eq_slice, axis=1, keepdims=True)
+                            eq_slice -= np.mean(eq_slice, axis=0, keepdims=True)
                             title += "'"
                     else:
                         cmap = None
 
-                    fig, pcm = equator_plot(r,phi,eq_slice[k,:,:],time=t[k], cmap=cmap,center_zero=center_zero,title=title)
+                    fig, pcm = equator_plot(r,phi,eq_slice,time=t[k], cmap=cmap,center_zero=center_zero,title=title)
                     fig.savefig('{:s}/{:s}_eq_{:06d}.png'.format(str(output_path),field,f['scales/write_number'][k]), dpi=dpi)
