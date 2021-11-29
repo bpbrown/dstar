@@ -29,8 +29,8 @@ Options:
     --run_time=<run_time>                How long to run, in rotating time units
     --niter=<niter>                      How long to run, in iterations
 
-    --dt_output=<dt_output>              Time between outputs, in rotation times (P_rot = 4pi) [default: 2]
-    --scalar_dt_output=<dt_scalar_out>   Time between scalar outputs, in rotation times (P_rot = 4pi) [default: 2]
+    --slice_dt=<slice_dt>                Cadence at which to output slices, in rotation times (P_rot = 4pi) [default: 10]
+    --scalar_dt=<scalar_dt>              Time between scalar outputs, in rotation times (P_rot = 4pi) [default: 2]
 
     --restart=<restart>                  Merged chechpoint file to restart from.
                                          Make sure "--label" is set to avoid overwriting the previous run.
@@ -270,8 +270,13 @@ else:
     noise.low_pass_filter(scales=0.25)
     s['g'] += amp*noise['g']
 
-energy_report_cadence  = report_cadence = 100
-dt = float(args['--max_dt'])
+max_dt = float(args['--max_dt'])
+dt = max_dt/10
+if not args['--restart']:
+    mode = 'overwrite'
+else:
+    write, dt = solver.load_state(args['--restart'])
+    mode = 'append'
 
 solver.stop_iteration = niter
 solver.stop_sim_time = run_time
@@ -283,7 +288,8 @@ Lz = dot(cross(r_vec,ρ*u), ez)
 enstrophy = dot(curl(u),curl(u))
 enstrophy.store_last = True
 
-traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=10, max_writes=np.inf)
+scalar_dt = float(args['--scalar_dt'])
+traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=scalar_dt, max_writes=np.inf)
 traces.add_task(avg(KE), name='KE')
 traces.add_task(integ(KE)/Ek**2, name='E0')
 traces.add_task(np.sqrt(avg(enstrophy)), name='Ro')
@@ -293,6 +299,23 @@ traces.add_task(avg(Lz), name='Lz')
 traces.add_task(shellavg(np.sqrt(dot(τ_u,τ_u))), name='τ_u')
 traces.add_task(shellavg(np.abs(τ_s)), name='τ_s')
 traces.add_task(np.abs(τ_p), name='τ_p')
+
+# Analysis
+eφ = d.VectorField(c, bases=b)
+eφ['g'][0] = 1
+er = d.VectorField(c, bases=b)
+er['g'][2] = 1
+ρ_cyl = d.Field(bases=b)
+ρ_cyl['g'] = r*np.sin(theta)
+Ωz = dot(u, eφ)/ρ_cyl # this is not ω_z; misses gradient terms; this is angular differential rotation.
+
+slice_dt = float(args['--slice_dt'])
+slices = solver.evaluator.add_file_handler(data_dir+'/slices', sim_dt = slice_dt, max_writes = 10, virtual_file=True, mode=mode)
+slices.add_task(s(theta=np.pi/2), name='s')
+slices.add_task(enstrophy(theta=np.pi/2), name='enstrophy')
+slices.add_task(azavg(Ωz), name='<Ωz>')
+slices.add_task(azavg(s), name='<s>')
+slices.add_task(shellavg(s), name='s(r)')
 
 report_cadence = 100
 flow = flow_tools.GlobalFlowProperty(solver, cadence=report_cadence)
@@ -305,14 +328,6 @@ flow.add_property(np.sqrt(dot(τ_u,τ_u)), name='|τ_u|')
 flow.add_property(np.abs(τ_s), name='|τ_s|')
 flow.add_property(np.abs(τ_p), name='|τ_p|')
 
-max_dt = float(args['--max_dt'])
-dt = max_dt/10
-if not args['--restart']:
-    mode = 'overwrite'
-else:
-    write, dt = solver.load_state(args['--restart'])
-    mode = 'append'
-
 # CFL
 cfl_safety_factor = float(args['--safety'])
 CFL = flow_tools.CFL(solver, initial_dt=dt, cadence=1, safety=cfl_safety_factor, max_dt=max_dt, threshold=0.1)
@@ -324,6 +339,7 @@ vol = 4*np.pi/3
 while solver.proceed and good_solution:
     if solver.iteration == startup_iter:
         main_start = time.time()
+    dt = CFL.compute_timestep()
     if solver.iteration % report_cadence == 0 and solver.iteration > 0:
         KE_avg = flow.volume_integral('KE')/vol # volume average needs a defined volume
         E0 = flow.volume_integral('KE')/Ek**2 # integral rather than avg
