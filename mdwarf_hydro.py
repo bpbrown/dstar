@@ -201,8 +201,10 @@ def source_function(r):
     logger.info("Source function: Q0/Q1 = {:}, σ = {:}, Q1 = {:}".format(Q0_over_Q1, σ, Q1))
     return (Q0_over_Q1*np.exp(-r**2/(2*σ**2)) + 1)*Q1
 
-source = d.Field(name='S', bases=b)
-source['g'] = source_function(r)
+source_func = d.Field(name='S', bases=b)
+source_func['g'] = source_function(r)
+source = de.Grid(source_func).evaluate()
+
 
 
 #e = 0.5*(grad(u) + trans(grad(u)))
