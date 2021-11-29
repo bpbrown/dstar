@@ -26,8 +26,8 @@ Options:
     --max_dt=<max_dt>                    Largest possible timestep [default: 0.25]
     --safety=<safety>                    CFL safety factor [default: 0.4]
 
-    --run_time=<run_time>                How long to run, in rotating time units
-    --niter=<niter>                      How long to run, in iterations
+    --run_time_sim=<run_time>            How long to run, in rotating time units
+    --run_time_iter=<niter>              How long to run, in iterations
 
     --slice_dt=<slice_dt>                Cadence at which to output slices, in rotation times (P_rot = 4pi) [default: 10]
     --scalar_dt=<scalar_dt>              Time between scalar outputs, in rotation times (P_rot = 4pi) [default: 2]
@@ -46,7 +46,6 @@ from dedalus.tools.parallel import Sync
 import pathlib
 import os
 import sys
-import time
 import h5py
 
 from mpi4py import MPI
@@ -99,12 +98,12 @@ Nθ = int(args['--Ntheta'])
 Nr = int(args['--Nr'])
 Nφ = Nθ*2
 
-if args['--niter']:
-    niter = int(float(args['--niter']))
+if args['--run_time_iter']:
+    niter = int(float(args['--run_time_iter']))
 else:
     niter = np.inf
-if args['--run_time']:
-    run_time = float(args['--run_time'])
+if args['--run_time_sim']:
+    run_time = float(args['--run_time_sim'])
 else:
     run_time = np.inf
 
@@ -125,7 +124,6 @@ from structure import lane_emden
 
 dealias = float(args['--dealias'])
 
-start_time = time.time()
 c = de.SphericalCoordinates('phi', 'theta', 'r')
 d = de.Distributor(c, mesh=mesh, dtype=np.float64)
 b = de.BallBasis(c, shape=(Nφ,Nθ,Nr), radius=radius, dealias=dealias, dtype=np.float64)
@@ -333,12 +331,9 @@ cfl_safety_factor = float(args['--safety'])
 CFL = flow_tools.CFL(solver, initial_dt=dt, cadence=1, safety=cfl_safety_factor, max_dt=max_dt, threshold=0.1)
 CFL.add_velocity(u)
 
-startup_iter = 10
 good_solution = True
 vol = 4*np.pi/3
 while solver.proceed and good_solution:
-    if solver.iteration == startup_iter:
-        main_start = time.time()
     dt = CFL.compute_timestep()
     if solver.iteration % report_cadence == 0 and solver.iteration > 0:
         KE_avg = flow.volume_integral('KE')/vol # volume average needs a defined volume
@@ -356,18 +351,5 @@ while solver.proceed and good_solution:
         logger.info(log_string)
         good_solution = np.isfinite(E0)
     solver.step(dt)
-end_time = time.time()
 
-startup_time = main_start - start_time
-main_loop_time = end_time - main_start
-DOF = Nφ*Nθ*Nr
-niter = solver.iteration - startup_iter
-if rank==0:
-    print('performance metrics:')
-    print('    startup time   : {:}'.format(startup_time))
-    print('    main loop time : {:}'.format(main_loop_time))
-    print('    main loop iter : {:d}'.format(niter))
-    print('    wall time/iter : {:f}'.format(main_loop_time/niter))
-    print('          iter/sec : {:f}'.format(niter/main_loop_time))
-    print('DOF-cycles/cpu-sec : {:}'.format(DOF*niter/(ncpu*main_loop_time)))
 solver.log_stats()
