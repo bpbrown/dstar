@@ -38,7 +38,7 @@ Options:
     --label=<label>                      Additional label for run output directory
 
     --ncc_cutoff=<ncc_cutoff>            Amplitude to truncate NCC terms [default: 1e-10]
-    --debug                              Produce debugging output for NCCs
+    --plot_sparse                        Plot sparsity structures for L+M and it's LU decomposition
 """
 import numpy as np
 from dedalus.tools.parallel import Sync
@@ -367,3 +367,47 @@ while solver.proceed and good_solution:
     solver.step(dt)
 
 solver.log_stats()
+
+if args['--plot_sparse']:
+    # Plot matrices
+    import matplotlib
+    import matplotlib.pyplot as plt
+
+    # Plot options
+    fig = plt.figure(figsize=(9,3))
+    cmap = matplotlib.cm.get_cmap("winter_r")
+    clim = (-10, 0)
+    lim_margin = 0.05
+
+    def plot_sparse(A):
+        I, J = A.shape
+        A_mag = np.log10(np.abs(A.A))
+        ax.pcolor(A_mag[::-1], cmap=cmap, vmin=clim[0], vmax=clim[1])
+        ax.set_xlim(-lim_margin, I+lim_margin)
+        ax.set_ylim(-lim_margin, J+lim_margin)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_aspect('equal', 'box')
+        ax.text(0.95, 0.95, 'nnz: %i' %A.nnz, horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
+        ax.text(0.95, 0.95, '\ncon: %.1e' %np.linalg.cond(A.A), horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
+
+    for sp in solver.subproblems:
+        m = sp.group[0]
+        # Plot LHS
+        ax = fig.add_subplot(1, 3, 1)
+        LHS = (sp.M_min + sp.L_min) @ sp.pre_right
+        plot_sparse(LHS)
+        ax.set_title('LHS (m = %i)' %m)
+        # Plot L
+        ax = fig.add_subplot(1, 3, 2)
+        L = sp.LHS_solver.LU.L
+        plot_sparse(L)
+        ax.set_title('L (m = %i)' %m)
+        # Plot U
+        ax = fig.add_subplot(1, 3, 3)
+        U = sp.LHS_solver.LU.U
+        plot_sparse(U)
+        ax.set_title('U (m = %i)' %m)
+        plt.tight_layout()
+        plt.savefig(data_dir+"/m_%i.pdf" %m)
+        fig.clear()
