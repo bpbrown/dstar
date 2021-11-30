@@ -38,6 +38,8 @@ for key in f['tasks']:
     data[key] = f['tasks/'+key][data_slice]
 f.close()
 
+MHD = 'ME' in data
+
 if args['--times']:
     subrange = True
     t_min, t_max = args['--times'].split(',')
@@ -47,7 +49,10 @@ if args['--times']:
 else:
     subrange = False
 
-energy_keys = ['KE', 'PE']
+if MHD:
+    energy_keys = ['KE', 'ME', 'PE']
+else:
+    energy_keys = ['KE', 'PE']
 
 fig_E, ax_E = plt.subplots(nrows=2)
 for key in energy_keys:
@@ -67,12 +72,14 @@ for ax in ax_E:
 fig_E.savefig('{:s}/log_energies.pdf'.format(str(output_path)))
 
 fig_tau, ax_tau = plt.subplots(nrows=2)
-ax_tau[0].plot(t, data['τ_u'], label=r'$\tau_{u}$')
-ax_tau[0].plot(t, data['τ_s'], label=r'$\tau_{s}$')
-ax_tau[0].plot(t, data['τ_p'], label=r'$\tau_{p}$')
-ax_tau[1].plot(t, data['τ_u'], label=r'$\tau_{u}$')
-ax_tau[1].plot(t, data['τ_s'], label=r'$\tau_{s}$')
-ax_tau[1].plot(t, data['τ_p'], label=r'$\tau_{p}$')
+for i in range(2):
+    ax_tau[i].plot(t, data['τ_u'], label=r'$\tau_{u}$')
+    ax_tau[i].plot(t, data['τ_s'], label=r'$\tau_{s}$')
+    ax_tau[i].plot(t, data['τ_p'], label=r'$\tau_{p}$')
+    if MHD:
+        ax_tau[i].plot(t, data['τ_A'], label=r'$\tau_{A}$')
+        ax_tau[i].plot(t, data['τ_φ'], label=r'$\tau_{\phi}$')
+
 for ax in ax_tau:
     if subrange:
         ax.set_xlim(t_min,t_max)
@@ -113,11 +120,16 @@ ax_r.set_yscale('log') # relies on it being the last instance; poor practice
 
 fig_f.savefig('{:s}/Re_and_Ro.pdf'.format(str(output_path)))
 
+if MHD:
+    benchmark_set = ['KE', 'ME', 'ME/KE', 'PE', 'Re', 'Ro', 'Lz']
+    data['ME/KE'] = data['ME']/data['KE']
+else:
+    benchmark_set = ['KE', 'PE', 'Re', 'Ro', 'Lz']
 
-benchmark_set = ['KE', 'PE', 'Re', 'Ro']
 i_ten = int(0.9*data[benchmark_set[0]].shape[0])
 for benchmark in benchmark_set:
     print("{:s} benchmark {:14.12g} +- {:4.2g} (averaged from {:g}-{:g})".format(benchmark, np.mean(data[benchmark][i_ten:]), np.std(data[benchmark][i_ten:]), t[i_ten], t[-1]))
+print()
 for benchmark in benchmark_set:
     print("{:s} benchmark {:14.12g} (at t={:g})".format(benchmark, data[benchmark][-1], t[-1]))
 print("total simulation time {:6.2g}".format(t[-1]-t[0]))
