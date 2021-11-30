@@ -189,6 +189,7 @@ grad_lnT = grad(lnT).evaluate()
 ρ = np.exp(lnρ).evaluate()
 grad_lnρ = grad(lnρ).evaluate()
 ρ_inv = np.exp(-lnρ).evaluate()
+ρT = (ρ*T).evaluate()
 ρT_inv = (T_inv*ρ_inv).evaluate()
 
 # Entropy source function, inspired from MESA model
@@ -203,7 +204,7 @@ def source_function(r):
 
 source_func = d.Field(name='S', bases=b)
 source_func['g'] = source_function(r)
-source = de.Grid(source_func).evaluate()
+source = de.Grid(Ek/Pr*ρT*source_func).evaluate()
 
 
 
@@ -220,11 +221,11 @@ Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
 #Problem
 problem = de.IVP([u, p, s, τ_u, τ_p, τ_s])
-problem.add_equation((ρ*ddt(u) + ρ*grad(p) - Co2*ρ*T*grad(s) - Ek*viscous_terms + lift(τ_u,-1),
+problem.add_equation((ρ*ddt(u) + ρ*grad(p) - Co2*ρT*grad(s) - Ek*viscous_terms + lift(τ_u,-1),
                       - ρ*dot(u, e) - ρ*cross(ez_g, u)))
-problem.add_equation((dot(grad_lnρ, u) + div(u) + τ_p, 0))
-problem.add_equation((ρ*ddt(s) - Ek/Pr*(lap(s)+ dot(grad_lnT, grad(s))) + lift(τ_s,-1),
-                      - ρ*dot(u, grad(s)) + Ek/Pr*ρ*source + 1/2*Ek/Co2*T_inv*Phi))
+problem.add_equation((T*dot(grad_lnρ, u) + T*div(u) + τ_p, 0))
+problem.add_equation((ρT*ddt(s) - Ek/Pr*T*(lap(s)+ dot(grad_lnT, grad(s))) + lift(τ_s,-1),
+                      - ρT*dot(u, grad(s)) + source + 1/2*Ek/Co2*Phi))
 # Boundary conditions
 problem.add_equation((radial(u(r=radius)), 0))
 problem.add_equation((radial(angular(e(r=radius))), 0))
@@ -233,10 +234,7 @@ problem.add_equation((s(r=radius), 0))
 logger.info("Problem built")
 
 logger.info("NCC expansions:")
-for ncc in [ρ, grad_lnρ, grad_lnT, (T*ρ).evaluate()]:
-    logger.info("{}: {}".format(ncc, np.where(np.abs(ncc['c']) >= ncc_cutoff)[0].shape))
-logger.info("possible bandwidth improved NCC expansions:")
-for ncc in [ρ, T, (T*grad_lnρ).evaluate(), (T*grad_lnT).evaluate(), (T*ρ).evaluate()]:
+for ncc in [ρ, T, ρT, (T*grad_lnρ).evaluate(), (T*grad_lnT).evaluate()]:
     logger.info("{}: {}".format(ncc, np.where(np.abs(ncc['c']) >= ncc_cutoff)[0].shape))
 
 if args['--thermal_equilibrium']:
