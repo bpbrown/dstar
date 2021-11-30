@@ -367,6 +367,7 @@ while solver.proceed and good_solution:
     solver.step(dt)
 
 solver.log_stats()
+logger.debug("mode-stages/DOF = {}".format(solver.total_modes/(Nφ*Nθ*Nr)))
 
 if args['--plot_sparse']:
     # Plot matrices
@@ -393,6 +394,8 @@ if args['--plot_sparse']:
 
     for sp in solver.subproblems:
         m = sp.group[0]
+        l = sp.group[1]
+        print("sparsity structure for m={} ({})".format(m, sp.group))
         # Plot LHS
         ax = fig.add_subplot(1, 3, 1)
         LHS = (sp.M_min + sp.L_min) @ sp.pre_right
@@ -409,5 +412,5 @@ if args['--plot_sparse']:
         plot_sparse(U)
         ax.set_title('U (m = %i)' %m)
         plt.tight_layout()
-        plt.savefig(data_dir+"/m_%i.pdf" %m)
+        plt.savefig(data_dir+"/m_{:d}_l_{:d}.pdf".format(m,l))
         fig.clear()
