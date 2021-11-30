@@ -151,7 +151,8 @@ radial = lambda A: de.RadialComponent(A)
 angular = lambda A: de.AngularComponent(A, index=1)
 trace = lambda A: de.Trace(A)
 power = lambda A, B: de.Power(A, B)
-lift = lambda A, n: de.LiftTau(A,b,n)
+lift_basis = b.clone_with(k=2)
+lift = lambda A, n: de.LiftTau(A,lift_basis,n)
 integ = lambda A: de.Integrate(A, c)
 azavg = lambda A: de.Average(A, c.coords[0])
 shellavg = lambda A: de.Average(A, c.S2coordsys)
@@ -162,6 +163,7 @@ ez = d.VectorField(c, name='ez', bases=b)
 ez['g'][1] = -np.sin(theta)
 ez['g'][2] =  np.cos(theta)
 ez_g = de.Grid(ez).evaluate()
+ez_g.name='ez_g'
 
 r_cyl = d.VectorField(c, name='r_cyl', bases=b)
 r_cyl['g'][2] =  r*np.sin(theta)
@@ -173,9 +175,10 @@ r_vec_g = de.Grid(r_vec).evaluate()
 
 structure = lane_emden(Nr, n_rho=n_rho, m=1.5, comm=MPI.COMM_SELF)
 
+bk2 = b.clone_with(k=2)
+bk1 = b.clone_with(k=1)
 T = d.Field(name='T', bases=b.radial_basis)
 lnρ = d.Field(name='lnρ', bases=b.radial_basis)
-ρT_inv = d.Field(name='ρT_inv', bases=b)
 
 if T['g'].size > 0 :
     # TO-DO: clean this up and make work for lane-emden solve in np.float64 rather than np.complex128
@@ -184,13 +187,24 @@ if T['g'].size > 0 :
          lnρ['g'][:,:,i] = structure['lnρ'](r=r_i).evaluate()['g'].real
 
 lnT = np.log(T).evaluate()
-T_inv = (1/T).evaluate()
+lnT.name='lnT'
 grad_lnT = grad(lnT).evaluate()
+grad_lnT.name='grad_lnT'
+grad_lnT1 = d.VectorField(c,name='grad_lnT1', bases=bk2.radial_basis)
+grad_lnT.require_scales(1)
+grad_lnT1['g'] = grad_lnT['g']
 ρ = np.exp(lnρ).evaluate()
+ρ.name='ρ'
+ρ2 = d.Field(name='ρ2', bases=bk2.radial_basis)
+ρ.require_scales(1)
+ρ2['g'] = ρ['g']
 grad_lnρ = grad(lnρ).evaluate()
-ρ_inv = np.exp(-lnρ).evaluate()
+grad_lnρ.name='grad_lnρ'
 ρT = (ρ*T).evaluate()
-ρT_inv = (T_inv*ρ_inv).evaluate()
+ρT.name='ρT'
+ρT2 = d.Field(name='ρT2', bases=bk2.radial_basis)
+ρT.require_scales(1)
+ρT2['g'] = ρT['g']
 
 # Entropy source function, inspired from MESA model
 def source_function(r):
@@ -205,7 +219,7 @@ def source_function(r):
 source_func = d.Field(name='S', bases=b)
 source_func['g'] = source_function(r)
 source = de.Grid(Ek/Pr*ρT*source_func).evaluate()
-
+source.name='source'
 
 
 #e = 0.5*(grad(u) + trans(grad(u)))
@@ -221,10 +235,10 @@ Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
 #Problem
 problem = de.IVP([u, p, s, τ_u, τ_p, τ_s])
-problem.add_equation((ρ*ddt(u) + ρ*grad(p) - Co2*ρT*grad(s) - Ek*viscous_terms + lift(τ_u,-1),
+problem.add_equation((ρ2*ddt(u) + ρ2*grad(p) - Co2*ρT2*grad(s) - Ek*viscous_terms + lift(τ_u,-1),
                       - ρ*dot(u, e) - ρ*cross(ez_g, u)))
 problem.add_equation((T*dot(grad_lnρ, u) + T*div(u) + τ_p, 0))
-problem.add_equation((ρT*ddt(s) - Ek/Pr*T*(lap(s)+ dot(grad_lnT, grad(s))) + lift(τ_s,-1),
+problem.add_equation((ρT2*ddt(s) - Ek/Pr*T*(lap(s)+ dot(grad_lnT1, grad(s))) + lift(τ_s,-1),
                       - ρT*dot(u, grad(s)) + source + 1/2*Ek/Co2*Phi))
 # Boundary conditions
 problem.add_equation((radial(u(r=radius)), 0))
@@ -234,7 +248,7 @@ problem.add_equation((s(r=radius), 0))
 logger.info("Problem built")
 
 logger.info("NCC expansions:")
-for ncc in [ρ, T, ρT, (T*grad_lnρ).evaluate(), (T*grad_lnT).evaluate()]:
+for ncc in [ρ2, T, ρT2, (T*grad_lnρ).evaluate(), (T*grad_lnT1).evaluate()]:
     logger.info("{}: {}".format(ncc, np.where(np.abs(ncc['c']) >= ncc_cutoff)[0].shape))
 
 if args['--thermal_equilibrium']:
