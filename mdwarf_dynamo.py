@@ -278,8 +278,7 @@ for ncc in [ρ2, T, ρT2, (T*grad_lnρ).evaluate(), (T*grad_lnT1).evaluate()]:
 if args['--thermal_equilibrium']:
     logger.info("solving for thermal equilbrium")
     equilibrium = de.LBVP([s, τ_s])
-    equilibrium.add_equation((-(lap(s)+ dot(grad_lnT, grad(s))) + lift(τ_s,-1),
-                              ρ*source))
+    equilibrium.add_equation((-Ek/Pr*T*(lap(s)+ dot(grad_lnT1, grad(s))) + lift(τ_s,-1), source))
     equilibrium.add_equation((s(r=radius), 0))
     eq_solver = equilibrium.build_solver(ncc_cutoff=ncc_cutoff)
     eq_solver.solve()
@@ -362,21 +361,34 @@ solver.stop_iteration = niter
 solver.stop_sim_time = run_time
 
 KE = 0.5*ρ*dot(u,u)
+KE.name = 'KE'
 KE.store_last = True
 ME = 0.5*dot(B,B)
+ME.name = 'ME'
 ME.store_last = True
 PE = Co2*ρ*T*s
+PE.name = 'PE'
+PE.store_last = True
 Lz = dot(cross(r_vec,ρ*u), ez)
+Lz.name='Lz'
+Lz.store_last = True
 enstrophy = dot(curl(u),curl(u))
+enstrophy.name='enstrophy'
 enstrophy.store_last = True
+Re2 = ρ*2*KE*(1/Ek)**2
+Re2.name = 'Re'
+Re2.store_last=True
+Ro2 = enstrophy
+Ro2.name = 'Ro'
+Ro2.store_last = True
 
 scalar_dt = float(args['--scalar_dt'])
 traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=scalar_dt, max_writes=np.inf)
 traces.add_task(avg(KE), name='KE')
 traces.add_task(avg(ME), name='ME')
 traces.add_task(integ(KE)/Ek**2, name='E0')
-traces.add_task(np.sqrt(avg(enstrophy)), name='Ro')
-traces.add_task(np.sqrt(2/Ek*avg(KE)), name='Re')
+traces.add_task(np.sqrt(avg(Ro2)), name='Ro')
+traces.add_task(np.sqrt(avg(Re2)), name='Re')
 traces.add_task(avg(PE), name='PE')
 traces.add_task(avg(Lz), name='Lz')
 traces.add_task(np.abs(τ_p), name='τ_p')
@@ -409,8 +421,8 @@ slices.add_task(dot(B,er)(r=radius), name='Br') # is this sufficient?  Should we
 
 report_cadence = 100
 flow = flow_tools.GlobalFlowProperty(solver, cadence=report_cadence)
-flow.add_property(np.sqrt(KE*2)/Ek, name='Re')
-flow.add_property(np.sqrt(enstrophy), name='Ro')
+flow.add_property(np.sqrt(Re2), name='Re')
+flow.add_property(np.sqrt(Ro2), name='Ro')
 flow.add_property(KE, name='KE')
 flow.add_property(ME, name='ME')
 flow.add_property(PE, name='PE')
