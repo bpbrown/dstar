@@ -342,8 +342,8 @@ slices.add_task(shellavg(s), name='s(r)')
 
 report_cadence = 100
 flow = flow_tools.GlobalFlowProperty(solver, cadence=report_cadence)
-flow.add_property(np.sqrt(Re2), name='Re')
-flow.add_property(np.sqrt(Ro2), name='Ro')
+flow.add_property(Re2, name='Re2')
+flow.add_property(Ro2, name='Ro2')
 flow.add_property(KE, name='KE')
 flow.add_property(PE, name='PE')
 flow.add_property(Lz, name='Lz')
@@ -363,8 +363,8 @@ while solver.proceed and good_solution:
     if solver.iteration % report_cadence == 0 and solver.iteration > 0:
         KE_avg = flow.volume_integral('KE')/vol # volume average needs a defined volume
         E0 = flow.volume_integral('KE')/Ek**2 # integral rather than avg
-        Re_avg = flow.volume_integral('Re')/vol
-        Ro_avg = flow.volume_integral('Ro')/vol
+        Re_avg = np.sqrt(flow.volume_integral('Re2')/vol)
+        Ro_avg = np.sqrt(flow.volume_integral('Ro2')/vol)
         PE_avg = flow.volume_integral('PE')/vol
         Lz_avg = flow.volume_integral('Lz')/vol
         max_τ = np.max([flow.max('|τ_u|'), flow.max('|τ_s|'), flow.max('|τ_p|')])
