@@ -9,7 +9,8 @@ Usage:
 Options:
     --Ekman=<Ekman>                      Ekman number    [default: 5e-5]
     --ConvectiveRossbySq=<Co2>           Squared Convective Rossby = Ra*Ek**2/Pr [default: 7e-3]
-    --Prandtl=<Prandtl>                  Prandtl number  [default: 0.5]
+    --Prandtl=<Prandtl>                  Prandtl number  [default: 1]
+    --MagneticPrandtl=<Pm>               Magnetic Prandtl number [default: 1]
     --n_rho=<n_rho>                      Density scale heights [default: 3]
 
     --Ntheta=<Ntheta>                    Latitudinal modes [default: 32]
@@ -65,7 +66,7 @@ dlog = logging.getLogger('evaluator')
 dlog.setLevel(logging.WARNING)
 
 data_dir = sys.argv[0].split('.py')[0]
-data_dir += '_Ek{}_Co{}_Pr{}'.format(args['--Ekman'],args['--ConvectiveRossbySq'],args['--Prandtl'])
+data_dir += '_Ek{}_Co{}_Pr{}_Pm{}'.format(args['--Ekman'],args['--ConvectiveRossbySq'],args['--Prandtl'],args['--MagneticPrandtl'])
 data_dir += '_Th{}_R{}'.format(args['--Ntheta'], args['--Nr'])
 if args['--benchmark']:
     data_dir += '_benchmark'
@@ -115,7 +116,12 @@ radius = 1
 Ek = Ekman = float(args['--Ekman'])
 Co2 = ConvectiveRossbySq = float(args['--ConvectiveRossbySq'])
 Pr = Prandtl = float(args['--Prandtl'])
-logger.info("Ek = {}, Co2 = {}, Pr = {}".format(Ek,Co2,Pr))
+Pm = MagneticPrandtl = float(args['--MagneticPrandtl'])
+
+logger.debug(sys.argv)
+logger.debug('-'*40)
+logger.info("Run parameters")
+logger.info("Ek = {}, Co2 = {}, Pr = {}, Pm = {}".format(Ek,Co2,Pr, Pm))
 
 import dedalus.public as de
 from dedalus.extras import flow_tools
@@ -133,9 +139,13 @@ phi, theta, r = b.local_grids()
 p = d.Field(name='p', bases=b)
 s = d.Field(name='s', bases=b)
 u = d.VectorField(c, name='u', bases=b)
+A = d.VectorField(c, name="A", bases=b)
+φ = d.Field(name="φ", bases=b)
 τ_p = d.Field(name='τ_p')
+τ_φ = d.Field(name="τ_φ")
 τ_s = d.Field(name='τ_s', bases=b_S2)
 τ_u = d.VectorField(c, name='τ_u', bases=b_S2)
+τ_A = d.VectorField(c, name="τ_A", bases=b_S2)
 
 # Parameters and operators
 # Parameters and operators
@@ -158,6 +168,9 @@ azavg = lambda A: de.Average(A, c.coords[0])
 shellavg = lambda A: de.Average(A, c.S2coordsys)
 avg = lambda A: de.Integrate(A, c)/(4/3*np.pi*radius**3)
 
+ell_func = lambda ell: ell+1
+ellp1 = lambda A: de.SphericalEllProduct(A, c, ell_func)
+
 # NCCs and variables of the problem
 ez = d.VectorField(c, name='ez', bases=b)
 ez['g'][1] = -np.sin(theta)
@@ -172,6 +185,9 @@ r_cyl['g'][1] = -r*np.cos(theta)
 r_vec = d.VectorField(c, name='r_vec', bases=b)
 r_vec['g'][2] = r
 r_vec_g = de.Grid(r_vec).evaluate()
+
+r_S2 = d.VectorField(c, name='r_S2')
+r_S2['g'][2] = 1
 
 structure = lane_emden(Nr, n_rho=n_rho, m=1.5, comm=MPI.COMM_SELF)
 
@@ -221,6 +237,8 @@ source_func['g'] = source_function(r)
 source = de.Grid(Ek/Pr*ρT*source_func).evaluate()
 source.name='source'
 
+B = curl(A)
+J = -lap(A) #curl(B)
 
 #e = 0.5*(grad(u) + trans(grad(u)))
 e = grad(u) + trans(grad(u))
@@ -234,17 +252,23 @@ trace_e.store_last = True
 Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
 #Problem
-problem = de.IVP([u, p, s, τ_u, τ_p, τ_s])
+problem = de.IVP([p, u, s, φ, A, τ_p, τ_u, τ_s, τ_φ, τ_A])
 problem.add_equation((ρ2*ddt(u) + ρ2*grad(p) - Co2*ρT2*grad(s) - Ek*viscous_terms + lift(τ_u,-1),
-                      - ρ*dot(u, e) - ρ*cross(ez_g, u)))
+                      - ρ*dot(u, e) - ρ*cross(ez_g, u) + cross(J,B)))
 problem.add_equation((T*dot(grad_lnρ, u) + T*div(u) + τ_p, 0))
+#TO-DO: consider: add ohmic heating?
 problem.add_equation((ρT2*ddt(s) - Ek/Pr*T*(lap(s)+ dot(grad_lnT1, grad(s))) + lift(τ_s,-1),
                       - ρT*dot(u, grad(s)) + source + 1/2*Ek/Co2*Phi))
+problem.add_equation((div(A) + τ_φ, 0)) # coulomb gauge
+problem.add_equation((ρ2*ddt(A) + ρ2*grad(φ) - Ek/Pm*lap(A) + lift(τ_A,-1),
+                        ρ2*cross(u, B) ))
 # Boundary conditions
 problem.add_equation((radial(u(r=radius)), 0))
 problem.add_equation((radial(angular(e(r=radius))), 0))
 problem.add_equation((integ(p), 0))
 problem.add_equation((s(r=radius), 0))
+problem.add_equation((integ(φ), 0))
+problem.add_equation((dot(r_S2, grad(A)(r=radius))+ellp1(A)(r=radius)/radius, 0))
 logger.info("Problem built")
 
 logger.info("NCC expansions:")
@@ -282,6 +306,50 @@ else:
     noise.low_pass_filter(scales=0.25)
     s['g'] += amp*noise['g']
 
+mag_amp = 1e-4
+invert_B_to_A = False
+if invert_B_to_A:
+    B_IC = d.VectorField(c, name="B_IC", bases=b)
+    B_IC['g'][2] = 0 # radial
+    B_IC['g'][1] = -mag_amp*3./2.*r*(-1+4*r**2-6*r**4+3*r**6)*(np.cos(phi)+np.sin(phi))
+    B_IC['g'][0] = -mag_amp*3./4.*r*(-1+r**2)*np.cos(theta)* \
+                                 ( 3*r*(2-5*r**2+4*r**4)*np.sin(theta)
+                                 +2*(1-3*r**2+3*r**4)*(np.cos(phi)-np.sin(phi)))
+    logger.info("set initial conditions for B")
+    IC_problem = de.LBVP([φ, A, τ_φ, τ_A])
+    IC_problem.add_equation((div(A) + τ_φ, 0))
+    IC_problem.add_equation((curl(A) + grad(φ) + lift(τ_A, -1), B_IC))
+    IC_problem.add_equation((integ(φ), 0))
+    IC_problem.add_equation((dot(r_S2, grad(A)(r=radius))+ellp1(A)(r=radius)/radius, 0))
+    IC_solver = IC_problem.build_solver()
+    IC_solver.solve()
+    logger.info("solved for initial conditions for A")
+else:
+    # Marti convective dynamo benchmark values
+    A_analytic_2 = (3/2*r**2*(1-4*r**2+6*r**4-3*r**6)
+                       *np.sin(theta)*(np.sin(phi)-np.cos(phi))
+                   +3/8*r**3*(2-7*r**2+9*r**4-4*r**6)
+                       *(3*np.cos(theta)**2-1)
+                   +9/160*r**2*(-200/21*r+980/27*r**3-540/11*r**5+880/39*r**7)
+                         *(3*np.cos(theta)**2-1)
+                   +9/80*r*(1-100/21*r**2+245/27*r**4-90/11*r**6+110/39*r**8)
+                        *(3*np.cos(theta)**2-1)
+                   +1/8*r*(-48/5*r+288/7*r**3-64*r**5+360/11*r**7)
+                       *np.sin(theta)*(np.sin(phi)-np.cos(phi))
+                   +1/8*(1-24/5*r**2+72/7*r**4-32/3*r**6+45/11*r**8)
+                       *np.sin(theta)*(np.sin(phi)-np.cos(phi)))
+    A_analytic_1 = (-27/80*r*(1-100/21*r**2+245/27*r**4-90/11*r**6+110/39*r**8)
+                            *np.cos(theta)*np.sin(theta)
+                    +1/8*(1-24/5*r**2+72/7*r**4-32/3*r**6+45/11*r**8)
+                        *np.cos(theta)*(np.sin(phi)-np.cos(phi)))
+    A_analytic_0 = (1/8*(1-24/5*r**2+72/7*r**4-32/3*r**6+45/11*r**8)
+                       *(np.cos(phi)+np.sin(phi)))
+
+    A['g'][0] = mag_amp*A_analytic_0
+    A['g'][1] = mag_amp*A_analytic_1
+    A['g'][2] = mag_amp*A_analytic_2
+
+
 max_dt = float(args['--max_dt'])
 dt = max_dt/10
 if not args['--restart']:
@@ -295,6 +363,8 @@ solver.stop_sim_time = run_time
 
 KE = 0.5*ρ*dot(u,u)
 KE.store_last = True
+ME = 0.5*dot(B,B)
+ME.store_last = True
 PE = Co2*ρ*T*s
 Lz = dot(cross(r_vec,ρ*u), ez)
 enstrophy = dot(curl(u),curl(u))
@@ -303,14 +373,17 @@ enstrophy.store_last = True
 scalar_dt = float(args['--scalar_dt'])
 traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=scalar_dt, max_writes=np.inf)
 traces.add_task(avg(KE), name='KE')
+traces.add_task(avg(ME), name='ME')
 traces.add_task(integ(KE)/Ek**2, name='E0')
 traces.add_task(np.sqrt(avg(enstrophy)), name='Ro')
 traces.add_task(np.sqrt(2/Ek*avg(KE)), name='Re')
 traces.add_task(avg(PE), name='PE')
 traces.add_task(avg(Lz), name='Lz')
-traces.add_task(shellavg(np.sqrt(dot(τ_u,τ_u))), name='τ_u')
-traces.add_task(shellavg(np.abs(τ_s)), name='τ_s')
 traces.add_task(np.abs(τ_p), name='τ_p')
+traces.add_task(np.abs(τ_φ), name='τ_φ')
+traces.add_task(shellavg(np.abs(τ_s)), name='τ_s')
+traces.add_task(shellavg(np.sqrt(dot(τ_u,τ_u))), name='τ_u')
+traces.add_task(shellavg(np.sqrt(dot(τ_A,τ_A))), name='τ_A')
 
 # Analysis
 eφ = d.VectorField(c, bases=b)
@@ -320,30 +393,38 @@ er['g'][2] = 1
 ρ_cyl = d.Field(bases=b)
 ρ_cyl['g'] = r*np.sin(theta)
 Ωz = dot(u, eφ)/ρ_cyl # this is not ω_z; misses gradient terms; this is angular differential rotation.
+Bφ = dot(B, eφ)
+Aφ = dot(A, eφ)
 
 slice_dt = float(args['--slice_dt'])
 slices = solver.evaluator.add_file_handler(data_dir+'/slices', sim_dt = slice_dt, max_writes = 10, virtual_file=True, mode=mode)
 slices.add_task(s(theta=np.pi/2), name='s')
 slices.add_task(enstrophy(theta=np.pi/2), name='enstrophy')
 slices.add_task(azavg(Ωz), name='<Ωz>')
+slices.add_task(azavg(Bφ), name='<Bφ>')
+slices.add_task(azavg(Aφ), name='<Aφ>')
 slices.add_task(azavg(s), name='<s>')
 slices.add_task(shellavg(s), name='s(r)')
+slices.add_task(dot(B,er)(r=radius), name='Br') # is this sufficient?  Should we be using radial(B) instead?
 
 report_cadence = 100
 flow = flow_tools.GlobalFlowProperty(solver, cadence=report_cadence)
 flow.add_property(np.sqrt(KE*2)/Ek, name='Re')
 flow.add_property(np.sqrt(enstrophy), name='Ro')
 flow.add_property(KE, name='KE')
+flow.add_property(ME, name='ME')
 flow.add_property(PE, name='PE')
 flow.add_property(Lz, name='Lz')
-flow.add_property(np.sqrt(dot(τ_u,τ_u)), name='|τ_u|')
 flow.add_property(np.abs(τ_s), name='|τ_s|')
 flow.add_property(np.abs(τ_p), name='|τ_p|')
+flow.add_property(np.sqrt(dot(τ_u,τ_u)), name='|τ_u|')
+flow.add_property(np.sqrt(dot(τ_A,τ_A)), name='|τ_A|')
 
 # CFL
 cfl_safety_factor = float(args['--safety'])
 CFL = flow_tools.CFL(solver, initial_dt=dt, cadence=1, safety=cfl_safety_factor, max_dt=max_dt, threshold=0.1)
 CFL.add_velocity(u)
+CFL.add_velocity(B)
 
 good_solution = True
 vol = 4*np.pi/3
@@ -355,11 +436,12 @@ while solver.proceed and good_solution:
         Re_avg = flow.volume_integral('Re')/vol
         Ro_avg = flow.volume_integral('Ro')/vol
         PE_avg = flow.volume_integral('PE')/vol
+        ME_avg = flow.volume_integral('ME')/vol
         Lz_avg = flow.volume_integral('Lz')/vol
         max_τ = np.max([flow.max('|τ_u|'), flow.max('|τ_s|'), flow.max('|τ_p|')])
 
         log_string = "iter: {:d}, dt={:.1e}, t={:.3e} ({:.2e})".format(solver.iteration, dt, solver.sim_time, solver.sim_time*Ek)
-        log_string += ", KE={:.2e} ({:.6e}), PE={:.2e}".format(KE_avg, E0, PE_avg)
+        log_string += ", KE={:.2e}, ME={:.2e}, PE={:.2e}".format(KE_avg, ME_avg, PE_avg)
         log_string += ", Re={:.1e}, Ro={:.1e}".format(Re_avg, Ro_avg)
         log_string += ", Lz={:.1e}, τ={:.1e}".format(Lz_avg, max_τ)
         logger.info(log_string)

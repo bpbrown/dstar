@@ -9,7 +9,7 @@ Usage:
 Options:
     --Ekman=<Ekman>                      Ekman number    [default: 5e-5]
     --ConvectiveRossbySq=<Co2>           Squared Convective Rossby = Ra*Ek**2/Pr [default: 7e-3]
-    --Prandtl=<Prandtl>                  Prandtl number  [default: 0.5]
+    --Prandtl=<Prandtl>                  Prandtl number  [default: 1]
     --n_rho=<n_rho>                      Density scale heights [default: 3]
 
     --Ntheta=<Ntheta>                    Latitudinal modes [default: 32]
