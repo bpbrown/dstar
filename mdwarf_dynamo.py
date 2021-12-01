@@ -469,14 +469,13 @@ if args['--plot_sparse']:
     import matplotlib.pyplot as plt
 
     # Plot options
-    fig = plt.figure(figsize=(9,3))
     cmap = matplotlib.cm.get_cmap("winter_r")
     clim = (-10, 0)
     lim_margin = 0.05
 
-    def plot_sparse(A):
+    def plot_sparse(A, ax, title):
         I, J = A.shape
-        A_mag = np.log10(np.abs(A.A))
+        A_mag = np.log10(np.abs(A.A), where=(np.abs(A.A)>0))
         ax.pcolor(A_mag[::-1], cmap=cmap, vmin=clim[0], vmax=clim[1])
         ax.set_xlim(-lim_margin, I+lim_margin)
         ax.set_ylim(-lim_margin, J+lim_margin)
@@ -485,26 +484,24 @@ if args['--plot_sparse']:
         ax.set_aspect('equal', 'box')
         ax.text(0.95, 0.95, 'nnz: %i' %A.nnz, horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
         ax.text(0.95, 0.95, '\ncon: %.1e' %np.linalg.cond(A.A), horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
+        ax.set_title(title)
+        return A.nnz, np.linalg.cond(A.A)
 
     for sp in solver.subproblems:
+        fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(6,6))
         m = sp.group[0]
         l = sp.group[1]
         print("sparsity structure for m={} ({})".format(m, sp.group))
         # Plot LHS
-        ax = fig.add_subplot(1, 3, 1)
         LHS = (sp.M_min + sp.L_min) @ sp.pre_right
-        plot_sparse(LHS)
-        ax.set_title('LHS (m = %i)' %m)
-        # Plot L
-        ax = fig.add_subplot(1, 3, 2)
         L = sp.LHS_solver.LU.L
-        plot_sparse(L)
-        ax.set_title('L (m = %i)' %m)
-        # Plot U
-        ax = fig.add_subplot(1, 3, 3)
         U = sp.LHS_solver.LU.U
-        plot_sparse(U)
-        ax.set_title('U (m = %i)' %m)
+        nnz_LHS, cond_LHS = plot_sparse(LHS, ax[0,0], 'LHS (m = %i)' %m)
+        nnz_LU, cond_LU = plot_sparse(L+U, ax[0,1], 'L+U (m = %i)' %m)
+        plot_sparse(L, ax[1,0], 'L (m = %i)' %m)
+        plot_sparse(U, ax[1,1], 'U (m = %i)' %m)
+        print("fill in {:.2g}".format(nnz_LU/nnz_LHS))
+
         plt.tight_layout()
         plt.savefig(data_dir+"/m_{:d}_l_{:d}.pdf".format(m,l))
-        fig.clear()
+        plt.close(fig)
