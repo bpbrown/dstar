@@ -66,13 +66,12 @@ dlog = logging.getLogger('evaluator')
 dlog.setLevel(logging.WARNING)
 
 data_dir = sys.argv[0].split('.py')[0]
-data_dir += '_Ek{}_Co{}_Pr{}_Pm{}'.format(args['--Ekman'],args['--ConvectiveRossbySq'],args['--Prandtl'],args['--MagneticPrandtl'])
+data_dir += '_Co{}_Ek{}_Pr{}_Pm{}'.format(args['--ConvectiveRossbySq'],args['--Ekman'],args['--Prandtl'],args['--MagneticPrandtl'])
 data_dir += '_Th{}_R{}'.format(args['--Ntheta'], args['--Nr'])
 if args['--benchmark']:
     data_dir += '_benchmark'
 if args['--label']:
     data_dir += '_{:s}'.format(args['--label'])
-logger.info("saving data in {}".format(data_dir))
 
 from dedalus.tools.config import config
 config['logging']['filename'] = os.path.join(data_dir,'logs/dedalus_log')
@@ -118,15 +117,19 @@ Co2 = ConvectiveRossbySq = float(args['--ConvectiveRossbySq'])
 Pr = Prandtl = float(args['--Prandtl'])
 Pm = MagneticPrandtl = float(args['--MagneticPrandtl'])
 
-logger.debug(sys.argv)
-logger.debug('-'*40)
-logger.info("Run parameters")
-logger.info("Ek = {}, Co2 = {}, Pr = {}, Pm = {}".format(Ek,Co2,Pr, Pm))
-
 import dedalus.public as de
 from dedalus.extras import flow_tools
 
+
+logger.debug(sys.argv)
+logger.debug('-'*40)
+logger.info("saving data in {}".format(data_dir))
+logger.info("Run parameters")
+logger.info("Ek = {}, Co2 = {}, Pr = {}, Pm = {}".format(Ek,Co2,Pr, Pm))
+
 from structure import lane_emden
+
+
 
 dealias = float(args['--dealias'])
 
@@ -417,6 +420,10 @@ slices.add_task(azavg(Bφ), name='<Bφ>')
 slices.add_task(azavg(Aφ), name='<Aφ>')
 slices.add_task(azavg(s), name='<s>')
 slices.add_task(shellavg(s), name='s(r)')
+slices.add_task(shellavg(ρ*dot(er, u)*(p+0.5*dot(u,u))), name='F_h(r)')
+slices.add_task(shellavg(ρ*dot(er, u)*dot(u,u)), name='F_KE(r)')
+slices.add_task(shellavg(-Co2*Ek/Pr*T*dot(er, grad(s))), name='F_κ(r)')
+slices.add_task(shellavg(Co2*source), name='F_source(r)')
 slices.add_task(dot(B,er)(r=radius), name='Br') # is this sufficient?  Should we be using radial(B) instead?
 
 report_cadence = 100
