@@ -121,15 +121,16 @@ ax_r.set_yscale('log') # relies on it being the last instance; poor practice
 fig_f.savefig('{:s}/Re_and_Ro.pdf'.format(str(output_path)))
 
 if MHD:
-    benchmark_set = ['KE', 'ME', 'ME/KE', 'PE', 'Re', 'Ro', 'Lz']
+    benchmark_set = ['KE', 'ME', 'ME/KE', 'PE', 'Re', 'Ro', 'Lz', 'τ_u', 'τ_s', 'τ_p', 'τ_A', 'τ_φ']
     data['ME/KE'] = data['ME']/data['KE']
 else:
-    benchmark_set = ['KE', 'PE', 'Re', 'Ro', 'Lz']
+    benchmark_set = ['KE', 'PE', 'Re', 'Ro', 'Lz', 'τ_u', 'τ_s', 'τ_p']
 
 i_ten = int(0.9*data[benchmark_set[0]].shape[0])
+print("benchmark values")
 for benchmark in benchmark_set:
-    print("{:s} benchmark {:14.12g} +- {:4.2g} (averaged from {:g}-{:g})".format(benchmark, np.mean(data[benchmark][i_ten:]), np.std(data[benchmark][i_ten:]), t[i_ten], t[-1]))
+    print("{:s} = {:14.12g} +- {:4.2g} (averaged from {:g}-{:g})".format(benchmark, np.mean(data[benchmark][i_ten:]), np.std(data[benchmark][i_ten:]), t[i_ten], t[-1]))
 print()
 for benchmark in benchmark_set:
-    print("{:s} benchmark {:14.12g} (at t={:g})".format(benchmark, data[benchmark][-1], t[-1]))
+    print("{:s} = {:14.12g} (at t={:g})".format(benchmark, data[benchmark][-1], t[-1]))
 print("total simulation time {:6.2g}".format(t[-1]-t[0]))

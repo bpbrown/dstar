@@ -68,6 +68,8 @@ dlog.setLevel(logging.WARNING)
 data_dir = sys.argv[0].split('.py')[0]
 data_dir += '_Co{}_Ek{}_Pr{}_Pm{}'.format(args['--ConvectiveRossbySq'],args['--Ekman'],args['--Prandtl'],args['--MagneticPrandtl'])
 data_dir += '_Th{}_R{}'.format(args['--Ntheta'], args['--Nr'])
+if args['--thermal_equilibrium']:
+    data_dir += '_therm'
 if args['--benchmark']:
     data_dir += '_benchmark'
 if args['--label']:
