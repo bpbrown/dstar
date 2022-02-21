@@ -1,10 +1,10 @@
 """
-Dedalus script for full sphere anelastic convection,
+Dedalus script for full sphere fully compressible convection,
 using a Lane-Emden structure and internal heat source.
 Designed for modelling fully-convective stars.
 
 Usage:
-    mdwarf_hydro.py [options]
+    FC_hydro.py [options]
 
 Options:
     --Ekman=<Ekman>                      Ekman number    [default: 5e-5]
@@ -226,6 +226,8 @@ grad_lnρ.name='grad_lnρ'
 ρT2 = d.Field(name='ρT2', bases=bk2.radial_basis)
 ρT.require_scales(1)
 ρT2['g'] = ρT['g']
+scale = T.evaluate()
+scale.name = 'scale'
 
 # Entropy source function, inspired from MESA model
 def source_function(r):
@@ -239,7 +241,8 @@ def source_function(r):
 
 source_func = d.Field(name='S', bases=b)
 source_func['g'] = source_function(r)
-source = de.Grid(Ek/Pr*ρT*source_func).evaluate()
+#source = de.Grid(ε*Ek/Pr*1/T*source_func).evaluate()
+source = de.Grid(ε*Ek/Pr*scale/T*source_func).evaluate()
 source.name='source'
 
 B = curl(A)
@@ -257,14 +260,27 @@ trace_e.store_last = True
 Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
 #Problem
-problem = de.IVP([p, u, s, φ, A, τ_p, τ_u, τ_s, τ_φ, τ_A])
-problem.add_equation((ρ2*ddt(u) + ρ2*grad(p) - Co2*ρT2*grad(s) - Ek*viscous_terms + lift(τ_u,-1),
-                      - ρ*dot(u, e) - ρ*cross(ez_g, u) + cross(J,B)))
-problem.add_equation((T*dot(grad_lnρ, u) + T*div(u) + τ_p, 0))
-#TO-DO: consider: add ohmic heating?
-problem.add_equation((ρT2*ddt(s) - Ek/Pr*T*(lap(s)+ dot(grad_lnT1, grad(s))) + lift(τ_s,-1),
-                      - ρT*dot(u, grad(s)) + source + 1/2*Ek/Co2*Phi))
+problem = de.IVP([u, Υ, θ, s, φ, A, τ_u, τ_s, τ_φ, τ_A])
+# check cP terms, think about these messy-as-heck prefactors
+problem.add_equation((ρ2*(dt(u) + Ro2*cP/Ma2*(h0*grad_θ + θ*grad(h0)) \
+                      - Ro2*cP*Sc/Ma2*(h0*grad(s) + h0*grad(s0)*θ) \
+                      - Ek*ρ0_inv*viscous_terms) \
+                      + lift(τu2,-1),
+                      ρ2*(-dot(u,grad(u)) - cross(ez_g, u) + ρ0_inv*exp(-Υ)*cross(J,B) \
+                                - Ro2*cP/Ma2*(grad(h0*(np.expm1(θ)-θ))) \
+                                + Ro2*cP/Ma2*(h0_g*np.expm1(θ)*grad(s) + h0_grad_s0_g*(np.expm1(θ)-θ))) )) # \
+problem.add_equation((scale*(ddt(Υ) + trace(grad_u) + dot(u, grad(Υ0))),
+                      scale*(-dot(u, grad(Υ))) ))
+problem.add_equation((θ - (γ-1)*Υ - γ*s, 0)) #EOS, cP absorbed into s.
+#TO-DO:
+# add ohmic heat
+# add viscous heat
+# dot(u,grad(s0)) = 0
+# does κ/cP -> Ek/Pr or Ek/(Pr*cP)?
+problem.add_equation((scale*(ddt(s) - Ek/Pr*ρ0_inv*(div(grad_θ)+2*dot(grad(θ0),grad_θ))) + lift(τ_s,-1),
+                      scale*(-dot(u,grad(s)) + Ek/Pr*ρ0_inv_g*dot(grad(θ),grad(θ))) + source))
 problem.add_equation((div(A) + τ_φ, 0)) # coulomb gauge
+# currently sets ρ = ρ0*exp(Υ) -> ρ0 (neglects exp(Υ), should appear in laplacian)
 problem.add_equation((ρ2*ddt(A) + ρ2*grad(φ) - Ek/Pm*lap(A) + lift(τ_A,-1),
                         ρ2*cross(u, B) ))
 # Boundary conditions
