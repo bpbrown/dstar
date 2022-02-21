@@ -167,7 +167,7 @@ angular = lambda A: de.AngularComponent(A, index=1)
 trace = lambda A: de.Trace(A)
 power = lambda A, B: de.Power(A, B)
 lift_basis = b.clone_with(k=2)
-lift = lambda A, n: de.LiftTau(A,lift_basis,n)
+lift = lambda A, n: de.Lift(A,lift_basis,n)
 integ = lambda A: de.Integrate(A, c)
 azavg = lambda A: de.Average(A, c.coords[0])
 shellavg = lambda A: de.Average(A, c.S2coordsys)
@@ -212,19 +212,19 @@ lnT.name='lnT'
 grad_lnT = grad(lnT).evaluate()
 grad_lnT.name='grad_lnT'
 grad_lnT1 = d.VectorField(c,name='grad_lnT1', bases=bk2.radial_basis)
-grad_lnT.require_scales(1)
+grad_lnT.change_scales(1)
 grad_lnT1['g'] = grad_lnT['g']
 ρ = np.exp(lnρ).evaluate()
 ρ.name='ρ'
 ρ2 = d.Field(name='ρ2', bases=bk2.radial_basis)
-ρ.require_scales(1)
+ρ.change_scales(1)
 ρ2['g'] = ρ['g']
 grad_lnρ = grad(lnρ).evaluate()
 grad_lnρ.name='grad_lnρ'
 ρT = (ρ*T).evaluate()
 ρT.name='ρT'
 ρT2 = d.Field(name='ρT2', bases=bk2.radial_basis)
-ρT.require_scales(1)
+ρT.change_scales(1)
 ρT2['g'] = ρT['g']
 scale = T.evaluate()
 scale.name = 'scale'
@@ -241,6 +241,7 @@ def source_function(r):
 
 source_func = d.Field(name='S', bases=b)
 source_func['g'] = source_function(r)
+ε = 1e-2
 #source = de.Grid(ε*Ek/Pr*1/T*source_func).evaluate()
 source = de.Grid(ε*Ek/Pr*scale/T*source_func).evaluate()
 source.name='source'
@@ -262,14 +263,14 @@ Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 #Problem
 problem = de.IVP([u, Υ, θ, s, φ, A, τ_u, τ_s, τ_φ, τ_A])
 # check cP terms, think about these messy-as-heck prefactors
-problem.add_equation((ρ2*(dt(u) + Ro2*cP/Ma2*(h0*grad_θ + θ*grad(h0)) \
+problem.add_equation((ρ2*(dt(u) + Ro2*cP/Ma2*(h0*grad(θ) + θ*grad(h0)) \
                       - Ro2*cP*Sc/Ma2*(h0*grad(s) + h0*grad(s0)*θ) \
                       - Ek*ρ0_inv*viscous_terms) \
                       + lift(τu2,-1),
                       ρ2*(-dot(u,grad(u)) - cross(ez_g, u) + ρ0_inv*exp(-Υ)*cross(J,B) \
                                 - Ro2*cP/Ma2*(grad(h0*(np.expm1(θ)-θ))) \
                                 + Ro2*cP/Ma2*(h0_g*np.expm1(θ)*grad(s) + h0_grad_s0_g*(np.expm1(θ)-θ))) )) # \
-problem.add_equation((scale*(ddt(Υ) + trace(grad_u) + dot(u, grad(Υ0))),
+problem.add_equation((scale*(ddt(Υ) + div(u) + dot(u, grad(Υ0))),
                       scale*(-dot(u, grad(Υ))) ))
 problem.add_equation((θ - (γ-1)*Υ - γ*s, 0)) #EOS, cP absorbed into s.
 #TO-DO:
@@ -277,7 +278,7 @@ problem.add_equation((θ - (γ-1)*Υ - γ*s, 0)) #EOS, cP absorbed into s.
 # add viscous heat
 # dot(u,grad(s0)) = 0
 # does κ/cP -> Ek/Pr or Ek/(Pr*cP)?
-problem.add_equation((scale*(ddt(s) - Ek/Pr*ρ0_inv*(div(grad_θ)+2*dot(grad(θ0),grad_θ))) + lift(τ_s,-1),
+problem.add_equation((scale*(ddt(s) - Ek/Pr*ρ0_inv*(lap(θ)+2*dot(grad(θ0),grad(θ))) + lift(τ_s,-1),
                       scale*(-dot(u,grad(s)) + Ek/Pr*ρ0_inv_g*dot(grad(θ),grad(θ))) + source))
 problem.add_equation((div(A) + τ_φ, 0)) # coulomb gauge
 # currently sets ρ = ρ0*exp(Υ) -> ρ0 (neglects exp(Υ), should appear in laplacian)
