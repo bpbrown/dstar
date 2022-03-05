@@ -1,0 +1,569 @@
+\documentclass{aastex62}
+
+\usepackage{amsthm, amsmath, amssymb}
+\usepackage{latexsym,graphicx,rotating,amsmath, epsfig, natbib, graphbox}
+\usepackage{listings}
+
+\newcommand{\sol}{\odot}
+\newcommand{\del}{\nabla}
+\newcommand{\cross}{\times}
+\newcommand{\avg}{\bar}
+\renewcommand{\vec}{\boldsymbol}
+\newcommand{\pomega}{\varpi}
+\newcommand{\conv}{\boldsymbol}
+
+\newcommand{\scrD}{\mathcal{D}}
+\newcommand{\scrH}{\mathcal{H}}
+\newcommand{\scrR}{\mathcal{R}}
+\newcommand{\scrL}{\mathcal{L}}
+\newcommand{\scrS}{\mathcal{S}}
+
+\newcommand{\Ra}{\mathrm{Ra}}
+\newcommand{\Ek}{\mathrm{Ek}}
+\renewcommand{\Pr}{\mathrm{Pr}}
+\newcommand{\Pm}{\mathrm{Pm}}
+\newcommand{\RoCsq}{\mathrm{Ro}_\mathrm{C}^2}
+\newcommand{\RoC}{\mathrm{Ro}_\mathrm{C}}
+
+\newcommand{\expm}{\mathrm{expm1}}
+
+\newcommand{\dedalus}{\href{http://dedalus-project.org/}{Dedalus}}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+\definecolor{codered}{rgb}{0.6,0,0}
+\definecolor{codeblue}{rgb}{0,0,0.6}
+
+% \watermark{text}
+\begin{document}
+\section{Basic equations}
+Here we derive and non-dimensionalize a form of the fully compressible equations.  We use the enthalpy $h$ and entropy $s$ as thermodynamic variables, along with the density $\rho$ and temperature $T$ (though we swiftly convert $T$ to $h$ in this document).  We use log formulations of both $h$ and $\rho$ for better handling of high as well as low Mach situations.
+
+Here we also take the dynamic viscous diffusion coefficient $\mu$ and thermal diffusion coefficient $K$ as appropriate models for the underlying transport processes.
+
+The fully compressible equations, in a rotating reference frame, are:
+\begin{equation}
+  \partial_t \ln \rho + \vec{u} \cdot \del \ln \rho + \del \cdot \vec{u} = 0
+\end{equation}
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \del \vec{u} + \del (h + \phi) = T\del s + \frac{1}{\rho}\del\cdot (\mu E_{ij}) - 2 \vec{\Omega} \times \vec{u}
+  \label{eq:u}
+\end{equation}
+\begin{equation}
+  \partial_t s + \vec{u}\cdot \del s = \frac{1}{\rho T}\left[\del \cdot (K \del T) + \frac{\mu}{2}\mathrm{Tr}(E^2)\right] + \frac{\epsilon_\mathrm{source}}{T}
+  \label{eq:entropy}
+\end{equation}
+with
+\begin{equation}
+  T = \frac{h}{c_P}, \quad E_{ij} = \del \vec{u} + (\del \vec{u})^\mathrm{T} - \frac{2}{3}(\del\cdot\vec{u})\mathrm{I},
+\end{equation}
+and linked by an ideal gas equation of state:
+\begin{equation}
+  \frac{\gamma}{\gamma-1} \frac{s}{c_P} - \frac{1}{\gamma - 1}\ln h + \ln \rho =0
+\end{equation}
+The momentum equation~\ref{eq:u} comes from standard form and incorporating the thermodynamic identity:
+\begin{equation}
+  \mathrm{d} h = T \mathrm{d} s - v \mathrm{d} P
+\end{equation}
+with $\mathrm{d} \rightarrow \del$ and $v = 1/\rho$.
+The entropy equation~\ref{eq:entropy} comes from \citep{Mihalas&Mihalas} eq~(27.17), with the addition of an entropy source $\epsilon/T$, like from nuclear heating or changes in radiative transport.
+
+The gas constant $R$ has been incorporated within the definition of $T$, and the equations are fully dimensional.  In this system:
+\begin{equation}
+  c_P = \frac{\gamma}{\gamma - 1}
+\end{equation}
+
+
+
+\subsection{Enthalpy all the time}
+The first step is to rewrite the entropy and momentum equations to be entirely in terms of enthalphy.
+
+\subsubsection{entropy}
+In the entropy equation, there are some manipulations which will make this system more clear.  The first step is to convert from $T$ to $h$, using $h = c_P T$.
+\begin{equation}
+  \partial_t s + \vec{u}\cdot \del s = \frac{1}{\rho h}\left[\del \cdot (K \del h)\right] + \frac{c_P \mu}{2 \rho h}\mathrm{Tr}(E^2) + \frac{c_P \epsilon_\mathrm{source}}{h}
+\end{equation}
+
+The diffusive term suggests a log enthalphy form:
+\begin{align}
+  \frac{1}{\rho h}\del\cdot K \del h &= \frac{K}{\rho}\left[\frac{1}{h}\del\cdot\del h + \frac{\del K \cdot \del h}{K h} \right] \\
+  & = \frac{K}{\rho}\left[\nabla^2 \ln h + \left(\nabla \ln h\right)^2 + \del \ln K \cdot \del \ln h \right]
+\end{align}
+which results in:
+\begin{equation}
+  \partial_t s + \vec{u}\cdot \del s = \frac{K}{\rho}\left[\nabla^2 \ln h + \left(\nabla \ln h\right)^2 + \del \ln K \cdot \del \ln h \right] + \frac{c_P \mu}{2 \rho h}\mathrm{Tr}(E^2) + \frac{c_P \epsilon_\mathrm{source}}{h}
+\end{equation}
+Note that if we fully embrace $\ln h$ and $\ln \rho$ as the primary thermodynamic variables (which we will), with $h = \exp(\ln h)$, $\rho = \exp(\ln \rho)$, we obtain:
+\begin{multline}
+  \partial_t s + \vec{u}\cdot \del s = K(r) \exp(-\ln \rho)\left[\nabla^2 \ln h + \left(\nabla \ln h\right)^2 + \del \ln K \cdot \del \ln h \right] \\ + \frac{c_P \mu}{2} \exp(-\ln \rho) \exp(-\ln h)\mathrm{Tr}(E^2) + c_P \epsilon_\mathrm{source} \exp(-\ln h)
+\end{multline}
+where we are also now explicitly noting that $K=K(r)$ (which may be a constant function of $r$).
+
+We might be alarmed at trading a $1/h$ for a $\exp{(-\ln h)}$, but we shouldn't be: $1/h$ is already a band-unlimited nonlinear term, and $\mathrm{Tr}(E^2)$ and $\epsilon$ are always going to be on the RHS.
+
+We will have to take more care however with the diffusive term, which in the current representation is now a nonlinear term.  There are multiple reasonable approaches to this, including either taking $K(r) \exp(-\ln \rho) \approx K(r) \exp(-\ln \rho_0) = \chi(r)$, or treating this as a fully nonlinear term and using implicit/explicit stepping techniques combined with clever destiffening of the equations.
+
+\subsubsection{momentum}
+In the momentum equation, this transformation is more straightforward, with only the $T\del s$ term changing:
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \del \vec{u} + \del (h + \phi) = \frac{h}{c_P}\del s + \frac{1}{\rho}\del\cdot (\mu E_{ij}) - 2 \vec{\Omega} \times \vec{u}
+\end{equation}
+Adopting $\ln h$ and $\ln \rho$ as the primary thermodynamic variables:
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \del \vec{u} + \del (\exp(\ln h) + \phi) = \exp(\ln h)\frac{1}{c_P}\del s + \exp(-\ln\rho)\del\cdot (\mu E_{ij}) - 2 \vec{\Omega} \times \vec{u}
+\end{equation}
+Clearly we're going to have to be a bit careful with our now nonlinear enthalpy gradient term $\del \exp(\ln h)$ and our buoyancy term, which has changed from a quadratic nonlinearity to a band-unlimited nonlinearity, as well as our diffusive term with it's potential nonlinear leading coefficient.
+
+To make progress, we will consider equilibria and then non-dimensionalize these equations.
+
+\subsection{Hydrostatic and thermal equilibrium}
+The hydrostatic momentum equations is:
+\begin{equation}
+  \del (\exp(\ln h) + \phi) = \exp(\ln h)\frac{1}{c_P}\del s
+\end{equation}
+and the thermal equilibrium equation is:
+\begin{equation}
+  K(r) \exp(-\ln \rho)\left[\nabla^2 \ln h + \left(\nabla \ln h\right)^2 + \del \ln K \cdot \del \ln h \right] = - c_P \epsilon_\mathrm{source} \exp(-\ln h)
+\end{equation}
+We now decompose the enthalpy, entropy and density into equilibrium and (potentially large) fluctuations:
+\begin{align}
+  \ln h = \ln h_0 + \ln h_1, &\quad \text{and} \quad \exp(\ln h) = h_0 \exp(\ln h_1),\\
+  \ln \rho = \ln \rho_0 + \ln \rho_1, &\quad \text{and} \quad \exp(\ln h) = \rho_0, \exp(\ln \rho_1),\\
+  s = s_0 + s_1.
+\end{align}
+This leads to these equilibrium equations, assuming all fluctations are zero:
+\begin{equation}
+  \del \ln h_0 = -\frac{\del \phi}{h_0} + \frac{1}{c_P}\del s_0
+\end{equation}
+and the thermal equilibrium equation is:
+\begin{equation}
+  K(r) \left[\nabla^2 \ln h_0 + \left(\nabla \ln h_0\right)^2 + \del \ln K \cdot \del \ln h \right] = - \frac{\rho_0}{h_0} c_P \epsilon_\mathrm{source}
+\end{equation}
+or
+\begin{equation}
+  \left[\nabla^2 h_0 + \del \ln K \cdot \del h_0 \right] = - \frac{\rho_0}{K(r) } c_P \epsilon_\mathrm{source} 
+\end{equation}
+
+\end{document}
+
+
+
+\subsection{Hydrostatic equilibrium in a polytrope}
+If we assert hydrostatic equilbrium, we have:
+\begin{equation}
+  \del (h + \phi) = h\frac{\del s}{c_P}
+\end{equation}
+or
+\begin{equation}
+  \del \ln h  - \frac{\del s}{c_P} = - \frac{\del \phi}{h}
+\end{equation}
+For an ideal gas we take
+\begin{equation}
+  \frac{\del s}{c_P} = \frac{1}{\gamma}\del \ln h - \frac{\gamma-1}{\gamma}\del \ln \rho
+\end{equation}
+and for a polytrope, we take
+\begin{equation}
+  \ln \rho = m \ln h
+\end{equation}
+in place of the thermal equation.
+
+If we take $L = R T_c/\phi_c$, or the density scale height of the equivalent isothermal atmosphere at the characteristic level (say the bottom of the atmosphere), take constant gravity, and take $s_c = c_P$, then we get this non-dimensional form:
+\begin{equation}
+  \del \ln h  - \del s = - \frac{\gamma-1}{\gamma}\exp{(-\ln h)} \vec{\hat{z}}
+\end{equation}
+where the $c_P$ in the enthalpy has been factored to pull out the $R$ separately from the $(\gamma-1)/\gamma$
+
+You know, I don't think there is actually any lengthscale information here.  What we have is $R T_c/\phi_c = 1$, because if L is the characteristic lengthscale for $\del \phi$, then the L's cancel out.  Does that somehow imply that $L=H_\rho$?  Or that $L=L_z$, the depth of the domain.  Alternatively, the correct scale is $\del \phi = \vec{g}$ and then we have a lengthscale $ L = R T_c/g_c = H_\rho$.  Very confusing.
+
+I wonder also if there's anything in this ratio:
+\begin{equation}
+  \frac{\phi_c}{h_c}~\text{or}~L=\frac{g}{h_c}
+\end{equation}
+I guess that's an adiabatic enthalphy scale height?
+(based on:)
+\begin{equation}
+  \del \ln h = - \frac{\del \phi}{h}, \quad\text{with} \quad \del s = 0.
+\end{equation}
+For now we stick to a density scaleheight system, just because.
+
+Here's some code that solves this above problem:
+\lstset{language=Python,
+  backgroundcolor=\color{backcolour},
+  commentstyle=\color{codered},
+  keywordstyle=\color{codepurple},
+  numberstyle=\tiny\color{codegray},
+  stringstyle=\color{codepurple},
+  frame=lines,
+  breakatwhitespace=false,
+  breaklines=true,
+  captionpos=b,
+  keepspaces=true,
+  numbers=left,
+  numbersep=5pt,
+  showspaces=false,
+  showstringspaces=false,
+  showtabs=false,
+  tabsize=2,
+  inputencoding=utf8,
+  extendedchars=true,
+  literate={Υ}{{$\Upsilon$}}1 {θ}{{$\theta$}}1 {τ}{{$\tau$}}1 {φ}{{$\phi$}}1 {γ}{{$\gamma$}}1,
+  }
+\begin{lstlisting}
+HS_problem = problems.NLBVP([Υ, θ, S, τθ])
+HS_problem.add_equation((grad(θ) - grad(S) + τθ*P1 ,
+                         -1*exp(-θ)*grad_φ*ez))
+HS_problem.add_equation((Υ - m*θ, 0))
+HS_problem.add_equation((S - 1/γ*θ+(γ-1)/γ*Υ, 0))
+HS_problem.add_equation((θ(z=0),0))
+\end{lstlisting}
+
+\subsection{Exact solutions to polytropes}
+The exact solution to a polytrope is:
+\begin{equation}
+  h(z) = h(z=0) + h_z z
+\end{equation}
+where
+\begin{equation}
+  h(z=0) =
+  \begin{cases}
+    1, \text{if}\ z_c=0\\
+    1+L_z h_z, \text{if}\ z_c=L_z
+  \end{cases}
+\end{equation}
+and if $L = (h/g)(z=z_c) = H_h(z=z_c)$:
+\begin{equation}
+\del_\phi = 1 \quad\text{and}\quad
+h_z = -\frac{\gamma}{\gamma-1}\frac{1}{(m+1)}
+\end{equation}
+but if $L = (RT/g)(z=z_c) = H_\rho(z=z_c)$:
+\begin{equation}
+\del_\phi = \frac{(\gamma-1)}{\gamma} \quad\text{and}\quad
+h_z = -\frac{1}{(m+1)}
+\end{equation}
+
+
+\section{A thermal equilibrum state}
+Let's now assert a base state, assuming hydrostatic equilibrium and a thermal equilibrium.
+
+Thermal equilibrium for this system is:
+\begin{equation}
+\left(\partial_t \frac{s_0}{c_P}\right) = \kappa\exp{(-\ln \rho_0)}\left[\nabla^2 \ln h_0 + \left(\nabla \ln h_0\right)^2\right] = 0
+\end{equation}
+or
+\begin{equation}
+\nabla^2 \ln h_0 + \left(\nabla \ln h_0\right)^2 = 0
+\end{equation}
+
+Recognizing that:
+\begin{equation}
+  \exp{(\ln h)} = \exp{(\ln h_0)}\exp{(\ln h_1)} = h_0 \exp{(\ln h_1)}
+\end{equation}
+and that:
+\begin{equation}
+  \del \left[h_0 \exp{(\ln h_1)} + \phi\right] = \del \left[h_0 (\exp{(\ln h_1)}-1) +h_0 + \phi\right]
+\end{equation}
+combined with:
+\begin{align}
+    h \frac{\del s}{c_P}
+    &= h_0 \exp{(\ln h_1)}\frac{\del(s_0+s_1)}{c_P} \\
+    &= h_0 \frac{\del s_0}{c_P}
+    + h_0 \frac{\del s_1}{c_P}
+    + h_0 \left[\exp{(\ln h_1)}-1\right]\frac{\del s_0}{c_P}
+    + h_0 \left[\exp{(\ln h_1)}-1\right]\frac{\del s_1}{c_P}
+\end{align}
+with hydrostatic equilbrium:
+\begin{equation}
+  \del \left[h_0 + \phi\right] = h_0 \frac{\del s_0}{c_P}
+\end{equation}
+we have our pressure/buoyancy balance:
+\begin{equation}
+  \del\left[h_0\left(\exp{(\ln h_1)}-1\right)\right]
+  = h_0 \frac{\del s_1}{c_P}
+  + h_0 \left[\exp{(\ln h_1)}-1\right]\frac{\del s_0}{c_P}
+  + h_0 \left[\exp{(\ln h_1)}-1\right]\frac{\del s_1}{c_P}.
+\end{equation}
+
+Let's work a bit further to pull out all linear-like terms.
+First, let's take $\theta = \ln h_1$ and absorb $c_P$ into $s$:
+\begin{equation}
+  \del\left[h_0\left(\exp{(\theta)}-1\right)\right]
+  = h_0 \del s_1
+  + h_0 \left[\exp{(\theta)}-1\right] \del s_0
+  + h_0 \left[\exp{(\theta)}-1\right] \del s_1.
+\end{equation}
+Now we add/subtract $\theta$ terms to de-stiffen $\exp{\theta}$ when linear terms can be isolated:
+\begin{align}
+  \del\left[h_0 \theta\right] + \del\left[h_0\left(\exp{(\theta)} -1 -\theta \right)\right]
+  = h_0 \del s_1
+  + h_0 \theta \del s_0
+  + h_0 \left[\exp{(\theta)} -1 -\theta\right] \del s_0
+  + h_0 \left[\exp{(\theta)} -1 \right] \del s_1.
+\end{align}
+Now we collect linear terms on the left, and nonlinear terms on the right:
+\begin{equation}
+  \del\left[h_0 \theta\right] - h_0 \del s_1 - (h_0 \del s_0)\theta
+  =
+  - \del\left[h_0\left(\exp{(\theta)} -1 -\theta \right)\right]
+  + h_0 \left[\exp{(\theta)} -1 -\theta\right] \del s_0
+  + h_0 \left[\exp{(\theta)} -1 \right] \del s_1.
+\end{equation}
+
+Collectively, this leads to a momentum equation with:
+\begin{multline}
+  \partial_t \vec{u}  +
+  \del\left[h_0 \theta\right] - (h_0 \del s_0)\theta - h_0 \del s_1
+  = \\
+  - \vec{u}\cdot \del\vec{u}
+  - \del\left[h_0\left(\exp{(\theta)} -1 -\theta \right)\right]
+  + (h_0 \del s_0)\left[\exp{(\theta)} -1 -\theta\right]
+  + h_0 \left[\exp{(\theta)} -1 \right] \del s_1
+  + \frac{\mu}{\rho}\vec{\scrD}_1\cdot(E)
+\end{multline}
+
+
+\emph{A note on computation:} the $\left(\exp{(\ln h_1)}-1\right)$ term should be computed using \verb+numpy.expm1(x)+ rather than computing \verb+numpy.exp(x)+ and then subtracting 1, especially when $x \sim \mathrm{Ma}^2 \ll 1$ (numerical convergence issues).
+
+\textbf{To do: add np.expm1 to the UnaryGridFunction list.}
+
+With the $\expm$ operator:
+\begin{multline}
+  \partial_t \vec{u}  +
+  \del\left[h_0 \theta\right] - (h_0 \del s_0)\theta - h_0 \del s_1
+  = \\
+  - \vec{u}\cdot \del\vec{u}
+  - \del\left[h_0\left(\expm{(\theta)} -\theta \right)\right]
+  + (h_0 \del s_0)\left[\expm{(\theta)} -\theta\right]
+  + h_0 \left[\expm{(\theta)}\right] \del s_1
+  + \frac{\mu}{\rho}\vec{\scrD}_1\cdot(E)
+\end{multline}
+We've moved various linear terms to the LHS and subtracted them off the corresponding nonlinearity on the RHS, which may help in stability especially at low Mach numbers.
+
+
+\subsection{Non-dimensional form}
+If we non-dimensionalize on a characteristic velocity $u_c$, then we're seeing the following non-dimensional parameter:
+\begin{equation}
+  \frac{h_c}{u_c^2} =
+  \left(\frac{\gamma}{\gamma-1}\right)\left(\frac{R T}{u_c^2}\right) =
+  \left(\frac{\gamma}{\gamma-1}\right) \mathrm{Ma}^2 =
+  c_P \mathrm{Ma}^2
+\end{equation}
+for an isothermal Mach number $\mathrm{Ma}$.
+
+If we also take a characteristic lengthscale $L_c = H_\rho$, and resulting timescale $\tau = L_c/u_c$, our time-derivative terms are of dimensional scale $u_c/\tau \partial_t = u_c^2/L_c \partial_t$.
+This suggests:
+\begin{align}
+  \partial_t \vec{u}  +
+  c_P \mathrm{Ma}^2 \del\left[h_0 \theta\right] &- c_P \mathrm{Ma}^2 (h_0 \del s_0)\theta - c_P \mathrm{Ma}^2 h_0 \del s_1
+  = \nonumber \\
+  &- \vec{u}\cdot \del\vec{u}
+  - c_P \mathrm{Ma}^2 \del\left[h_0\left(\expm{(\theta)} \nonumber -\theta \right)\right] \nonumber \\
+  & + c_P \mathrm{Ma}^2 (h_0 \del s_0)\left[\expm{(\theta)} -\theta\right]
+  + c_P \mathrm{Ma}^2 h_0 \left[\expm{(\theta)}\right] \del s_1 \nonumber \\
+  &+ \scrR \frac{1}{\rho_0}\exp{(-\ln \rho_1)}\vec{\scrD}_1\cdot(E).
+\end{align}
+The last term is
+\begin{equation}
+  \scrR = \frac{\mu}{\rho_c u_c L_c}.
+\end{equation}
+If we play the same linearization games with the diffusion term:
+\begin{equation}
+\scrR \frac{1}{\rho_0}\exp{(-\ln \rho_1)}\vec{\scrD}_1\cdot(E)
+= \scrR \frac{1}{\rho_0}\vec{\scrD}_1\cdot(E)
+\scrR \frac{1}{\rho_0}\left[\exp{(-\ln \rho_1)}-1\right]\vec{\scrD}_1\cdot(E).
+\end{equation}
+Taking $\Upsilon = \ln \rho_1$:
+\begin{align}
+  \partial_t \vec{u}  +
+  c_P \mathrm{Ma}^2 \del\left[h_0 \theta\right] &- c_P \mathrm{Ma}^2 (h_0 \del s_0)\theta - c_P \mathrm{Ma}^2 h_0 \del s_1
+  - \scrR \frac{1}{\rho_0}\vec{\scrD}_1\cdot(E) = \nonumber \\
+  &- \vec{u}\cdot \del\vec{u}
+  - c_P \mathrm{Ma}^2 \del\left[h_0\left(\expm{(\theta)} \nonumber -\theta \right)\right] \nonumber \\
+  & + c_P \mathrm{Ma}^2 (h_0 \del s_0)\left[\expm{(\theta)} -\theta\right]
+  + c_P \mathrm{Ma}^2 h_0 \left[\expm{(\theta)}\right] \del s_1 \nonumber \\
+  &+ \scrR \frac{1}{\rho_0}\left[\expm{(\Upsilon)}\right]\vec{\scrD}_1\cdot(E).
+\end{align}
+
+\end{document}
+
+\newpage
+
+Collectively, this leads to a momentum equation with:
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \del\vec{u} + \del\left[h_0\left(\exp{(\ln h_1)}-1\right)\right] = \frac{h_0}{c_P}\exp{(\ln h_1)}\del s + \frac{h_0}{c_P}\left(\exp{(\ln h_1)}-1\right)\del s_0 + \frac{\mu}{\rho}\vec{\scrD}_1\cdot(E),
+\end{equation}
+or
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \del\vec{u} + \del\left[h_0\left(\exp{(\ln h_1)}-1\right)\right] -h_0 \ln h_1 \frac{\del s_0}{c_P} = h_0\exp{(\ln h_1)}\frac{\del s}{c_P} + h_0\left(\exp{(\ln h_1)}-1-\ln h_1\right)\frac{\del s_0}{c_P} + \frac{\mu}{\rho}\vec{\scrD}_1\cdot(E),
+\end{equation}
+or, going to $\theta = \ln h_1$ and absorbing $c_P$ into $s$:
+\begin{multline}
+  \partial_t \vec{u}  + \del\left[h_0\theta\right] - h_0\del s - (h_0 \del s_0) \theta  = \\
+  - \vec{u}\cdot \del\vec{u} - \del\left[h_0\left(\exp{(\theta)}-1-\theta\right)\right] + h_0\left(\exp{(\theta)}-1\right)\del s
+  + h_0\left(\exp{(\theta)}-1-\theta\right)\del s_0 + \frac{\mu}{\rho}\vec{\scrD}_1\cdot(E).
+\end{multline}
+We've moved various linear terms to the LHS and subtracted them off the corresponding nonlinearity on the RHS, which may help in stability especially at low Mach numbers.
+
+\subsection{non-dimensional form}
+If we non-dimensionalize on a characteristic velocity $u_c$, then we're seeing the following non-dimensional parameter:
+\begin{equation}
+  \frac{h_c}{u_c^2} =
+  \left(\frac{\gamma}{\gamma-1}\right)\left(\frac{R T}{u_c^2}\right) =
+  \left(\frac{\gamma}{\gamma-1}\right) \mathrm{Ma}^2 =
+  c_P \mathrm{Ma}^2
+\end{equation}
+for an isothermal Mach number $\mathrm{Ma}$.  This suggests:
+\begin{align}
+\partial_t \vec{u} + &c_P \mathrm{Ma}^2 \left(\del\left[h_0\theta\right] -h_0\del s - (h_0 \del s_0) \theta \right)  =
+ -  \vec{u}\cdot \del\vec{u} + \frac{\mu}{\rho}\vec{\scrD}_1\cdot(E) \\
+&\phantom{=} - c_P \mathrm{Ma}^2\left(\del\left[h_0\left(\exp{(\theta)}-1-\theta\right)\right] - h_0\left(\exp{(\theta)}-1\right)\del s
+- h_0\left(\exp{(\theta)}-1-\theta\right)\del s_0 \right) \nonumber
+\end{align}
+
+\emph{A note on computation:} the $\left(\exp{(\ln h_1)}-1\right)$ term should be computed using \verb+numpy.expm1(x)+ rather than computing \verb+numpy.exp(x)+ and then subtracting 1, especially when $x \sim \mathrm{Ma}^2 \ll 1$ (numerical convergence issues).
+
+\textbf{To do: add np.expm1 to the UnaryGridFunction list.}
+
+With the $\expm$ operator:
+\begin{align}
+\partial_t \vec{u} + &c_P \mathrm{Ma}^2 \left(\del\left[h_0\theta\right] -h_0\del s - (h_0 \del s_0) \theta \right)  =
+-  \vec{u}\cdot \del\vec{u} + \frac{\mu}{\rho}\vec{\scrD}_1\cdot(E) \\
+&\phantom{=} - c_P \mathrm{Ma}^2\left(\del\left[h_0\left(\expm{(\theta)}-\theta\right)\right] - h_0\expm{(\theta)}\del s
+- h_0\left(\expm{(\theta)}-\theta\right)\del s_0 \right) \nonumber
+\end{align}
+
+
+\section{Here we try an adiabatic state}
+
+\subsection{Some kind of equilibrium}
+Let's now assert a base state, assuming hydrostatic equilibrium and an adiabatic profile.  This differs from assuming thermal equilibrium.
+Let:
+\begin{equation}
+  \del s_0 = 0
+\end{equation}
+and
+\begin{equation}
+  \del(h_{0,0}\exp{\ln h_0} + \phi) = 0
+\end{equation}
+this means:
+\begin{equation}
+  h_{0,0}\exp{\ln h_0} + \phi = h_0 + \phi = \scrH
+\end{equation}
+for some gauge constant $\scrH$.
+
+\subsection{Momentum equation about HS eq}
+
+What's the momentum equation look like for fluctuations about this hydrostatic, adiabatic equilibrium?
+
+Recognizing that:
+\begin{equation}
+  \exp{(\ln h)} = \exp{(\ln h_0)}\exp{(\ln h_1)} = h_0 \exp{(\ln h_1)}
+\end{equation}
+and that:
+\begin{equation}
+  \del \left[h_0 \exp{(\ln_1)} + \phi\right] = \del\left[h_0\left(\exp{(\ln h_1)}-1\right)\right]
+\end{equation}
+we have:
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \del\vec{u} + \del\left[h_0\left(\exp{(\ln h_1)}-1\right)\right] = \frac{h_0}{c_P}\exp{(\ln h_1)}\del s + \vec{\scrD}_1\cdot(\nu E),
+\end{equation}
+If we non-dimensionalize on a characteristic velocity $u_c$, then we're seeing the following non-dimensional parameter:
+\begin{equation}
+  \frac{h_0}{u_c^2} = \left(\frac{\gamma}{\gamma-1}\right)\left(\frac{R T}{u_c^2}\right) = \left(\frac{\gamma}{\gamma-1}\right) \mathrm{Ma}^2
+\end{equation}
+for an isothermal Mach number $\mathrm{Ma}$.  This suggests:
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \del\vec{u} + \left(\frac{\gamma}{\gamma-1}\right) \mathrm{Ma}^2 \del\left[h_0\left(\exp{(\ln h_1)}-1\right)\right] = \mathrm{Ma}^2 h_0 \exp{(\ln h_1)}\del s + \vec{\scrD}_1\cdot(\nu E),
+\end{equation}
+with $h_0$ now scaled to some reference value.
+
+\emph{A note on computation:} the $\left(\exp{(\ln h_1)}-1\right)$ term should be computed using \verb+numpy.expm1(x)+ rather than computing \verb+numpy.exp(x)+ and then subtracting 1, especially when $x \sim \mathrm{Ma}^2 \ll 1$ (numerical convergence issues).
+
+\textbf{To do: add np.expm1 to the UnaryGridFunction list.}
+
+There's one more trick that's likely useful for low-Mach settings:
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \del\vec{u} + \left(\frac{\gamma}{\gamma-1}\right) \mathrm{Ma}^2 \del\left[h_0 \ln h_1 \right] = \mathrm{Ma}^2 h_0 \exp{(\ln h_1)}\del s -
+  \left(\frac{\gamma}{\gamma-1}\right) \mathrm{Ma}^2 \del\left[h_0\left(\exp{(\ln h_1)}-1-\ln h_1\right)\right] + \vec{\scrD}_1\cdot(\nu E),
+\end{equation}
+or
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \del\vec{u} + \left(\frac{\gamma}{\gamma-1}\right) \mathrm{Ma}^2 \del\left[h_0 \ln h_1 \right] = \mathrm{Ma}^2 h_0 \exp{(\ln h_1)}\del s -
+  \left(\frac{\gamma}{\gamma-1}\right) \mathrm{Ma}^2 \del\left[h_0\left(\mathrm{expm1}{(\ln h_1)}-\ln h_1\right)\right] + \vec{\scrD}_1\cdot(\nu E),
+\end{equation}
+where we've just shifted a likely wave-like linear term to the LHS.  Not clear there is a similar one in the quadratic thermal nonlinearity, but that's also because we assumed $\del s_0 = 0$, and there are no gravity waves in that basic state (just acoustic).  That's actually very interesting.
+
+\subsection{Making a super-adiabatic atmosphere}
+If the zero state has $\del s_0 = 0$, then the superadiabaticity must be in the initial conditions.  Here's what that looks like.
+
+The hydrostatically balanced temperature profile is:
+\begin{equation}
+  T = \frac{g}{c_P} \ldots
+\end{equation}
+
+\subsection{Thermal considerations}
+
+
+
+The lack of thermal equilibrium implies a constant heating source Q:
+\begin{equation}
+  Q = \vec{\scrD}_1 \cdot (\chi \ln h_0) + \chi (\del \ln h_0)^2
+\end{equation}
+
+The equation set becomes:
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \vec{u} + \del (h_0\left[\exp{(\ln h_1)}-1\right]) = \frac{1}{c_P}h_0(\exp{(\ln h_1)})\del s_1 + \vec{\scrD}_1\cdot(\nu E),
+\end{equation}
+or
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \vec{u} + \del (h_0 \ln h_1) - \frac{1}{c_P}h_0 \del s_1 = -\del (h_0\left[\exp{(\ln h_1)}-1-\ln h_1 \right]) + \frac{1}{c_P}h_0(\exp{(\ln h_1)} - 1)\del s_1 + \vec{\scrD}_1\cdot(\nu E),
+\end{equation}
+where we have de-stiffened both the nonlinear pressure gradient term and the nonlinear buoyancy term.
+The viscous term is:
+\begin{equation}
+  \vec{\scrD}_1\cdot(\nu E) = (\del + \del \ln \rho_0 + \del \ln \rho_1) \cdot(\nu E)
+\end{equation}
+so:
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \vec{u} + \del (h_0 \ln h_1) - \frac{1}{c_P}h_0 \del s_1 - \vec{\scrD}_{1,0} \cdot(\nu E) = -\del (h_0\left[\exp{(\ln h_1)}-1-\ln h_1 \right]) + \frac{1}{c_P}h_0(\exp{(\ln h_1)} - 1)\del s_1 + \del \ln \rho_1\cdot(\nu E),
+\end{equation}
+We need some better notation.  Let $\Theta = \ln h$ and $\Upsilon = \ln \rho$.
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \vec{u} + \del (h_0 \Theta_1) - \frac{1}{c_P}h_0 \del s_1 - \vec{\scrD}_{1,0} \cdot(\nu E) = -\del (h_0\left[\exp{\Theta_1}-1-\Theta_1 \right]) + \frac{1}{c_P}h_0(\exp{\Theta_1} - 1)\del s_1 + \del \Upsilon_1\cdot(\nu E),
+\end{equation}
+
+For the entropy equation, we need to decompose the RHS:
+\begin{align}
+\vec{\scrD}_1 \cdot (\chi \Theta) + \chi (\del \Theta)^2 &=
+\vec{\scrD}_1 \cdot (\chi \Theta_0) + \chi (\del \Theta_0)^2
++ \vec{\scrD}_1 \cdot (\chi \Theta_1) + \chi (\del \Theta_1)^2
++ 2 \chi (\del \Theta_0\cdot \del \Theta_1) \\
+& = \vec{\scrD}_{1,0} \cdot (\chi \Theta_0) + \chi (\del \Theta_0)^2 \\
+& \phantom{=} + \del \Upsilon_1 \cdot(\chi \Theta_0)
++ \vec{\scrD}_{1,0} \cdot (\chi \Theta_1) \\
+& \phantom{=} + \del \Upsilon_1 \cdot(\chi \Theta_1)+ \chi (\del \Theta_1)^2
+ + 2 \chi (\del \Theta_0\cdot \del \Theta_1) \\
+& = Q + \del \Upsilon_1 \cdot(\chi \Theta_1)+ \chi (\del \Theta_1)^2
++ 2 \chi (\del \Theta_0\cdot \del \Theta_1) \\
+& \phantom{=} + \del \Upsilon_1 \cdot(\chi \Theta_0)
++ \vec{\scrD}_{1,0} \cdot (\chi \Theta_1)
+\end{align}
+the entropy equation is:
+\begin{equation}
+\frac{1}{c_P}\left(\partial_t s_1 + \vec{u}\cdot \del s_1\right) =
+Q +
+ \vec{\scrD}_1 \cdot (\chi \ln h) + \chi (\del \ln h)^2 + \exp{(-\ln h)}\frac{\nu}{2}\mathrm{Tr}(E^2).
+\end{equation}
+
+Our variables are now:
+\begin{equation}
+\ln h = \ln h_0 + \ln h_1, \quad ln \rho = \ln \rho_0 + \ln \rho_1, \quad s = s_0 + s_1.
+\end{equation}
+
+Thermal equilibrium means:
+
+
+
+
+\end{document}
