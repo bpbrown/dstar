@@ -277,6 +277,88 @@ Now, let $\scrR = u_c L \rho_c/\mu$ and $\scrP = u_c L c_P \rho_c /K = \mathrm{P
 \end{equation}
 
 
+\subsubsection{Choose: $s_c = c_P$, $\tau = 1/(2\Omega)$}
+
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \del \vec{u} + \frac{h_c}{(2\Omega L)^2}\del (h_0[\exp(\theta)-1]) = \frac{h_c}{(2\Omega L)^2} h_0\exp(\theta)\del s + \frac{\mu/\rho_c}{2 \Omega L^2}\frac{1}{\rho_0}\exp(-\Upsilon)\del\cdot (E_{ij}) - \vec{\hat{z}} \times \vec{u},
+\end{equation}
+
+The entropy equation is:
+\begin{equation}
+  \partial_t s + \vec{u}\cdot \del s =
+  \frac{K/(c_P \rho_c)}{2 \Omega L^2} \frac{1}{\rho_0} \exp(-\Upsilon)\mathcal{D}^2(\theta)
+  + \frac{\mu/\rho_c}{2\Omega L^2} \frac{(2\Omega L)^2}{h_c} \frac{1}{2 }\frac{1}{\rho_0 h_0}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)
+  + \frac{1}{2 \Omega} \frac{\mathcal{S}}{c_P}
+\end{equation}
+
+And if we take $\mathrm{Ek} = (\mu/\rho_c)/(2 \Omega L^2)$ then these look like:
+
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \del \vec{u} + \left(\frac{h_c}{(2\Omega L)^2}\right)\del (h_0[\exp(\theta)-1]) = \left(\frac{h_c}{(2\Omega L)^2}\right) h_0\exp(\theta)\del s + \mathrm{Ek}\frac{1}{\rho_0}\exp(-\Upsilon)\del\cdot (E_{ij}) - \vec{\hat{z}} \times \vec{u},
+\end{equation}
+
+The entropy equation is:
+\begin{equation}
+  \partial_t s + \vec{u}\cdot \del s =
+  \frac{\mathrm{Ek}}{\mathrm{Pr}} \frac{1}{\rho_0} \exp(-\Upsilon)\mathcal{D}^2(\theta)
+  + \mathrm{Ek} \left(\frac{(2\Omega L)^2}{h_c}\right) \frac{1}{2}\frac{1}{\rho_0 h_0}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)
+  + \frac{1}{2 \Omega} \frac{\mathcal{S}}{c_P}
+\end{equation}
+
+We're left with an interesting term in these equations: $\left(h_c/(2\Omega L)^2\right)$.  Let's see what we can turn that into.
+\begin{equation}
+\frac{h_c}{(2\Omega L)^2}
+= \frac{h_c L^2}{(\mu/\rho_c)^2} \frac{(\mu/\rho_c)^2}{(2\Omega L^2)^2}
+= \frac{h_c L^2}{(\mu/\rho_c)(K/(c_P \rho_c))}\left(\frac{K/(c_P \rho_c)}{\mu/\rho_c}\right) \left(\frac{(\mu/\rho_c)}{2\Omega L^2}\right)^2
+= \frac{\mathrm{R}^* \mathrm{Ek}^2}{\mathrm{Pr}}
+\end{equation}
+which suggests the new definition:
+\begin{equation}
+\mathrm{R}^* = \frac{h_c L^2}{(\mu/\rho_c)(K/(c_P \rho_c))}
+\end{equation}
+Oh, interesting!  Now adopt our earlier $\scrR = u_c L/(\mu/\rho_c)$ and $\scrP = u_c L/(K/c_P \rho_c) = \mathrm{Pr}\scrR$:
+\begin{equation}
+\mathrm{R}^* = \frac{h_c}{u_c^2}\frac{u_c^2 L^2}{(\mu/\rho_c)(K/(c_P \rho_c))} = \frac{1}{\gamma-1}\frac{1}{\mathrm{Ma}^{2}} \scrR \scrP
+\end{equation}
+and if we take
+\begin{equation}
+  \mathrm{Ra} = \scrR \scrP = \frac{u_c^2 L^2}{(\mu/\rho_c)(K/(c_P \rho_c))}
+\end{equation}
+then:
+\begin{equation}
+  \frac{h_c}{(2\Omega L)^2} = \frac{1}{\gamma-1}\frac{1}{\mathrm{Ma}^{2}}\frac{\mathrm{Ra}\mathrm{Ek}^2}{\mathrm{Pr}}
+\end{equation}
+where throughout:
+\begin{equation}
+  \mathrm{Ma}^{2} \equiv \frac{u_c^2}{\gamma T_c}
+\end{equation}
+namely the adiabatic Mach number.
+
+Clean this up by defining:
+\begin{equation}
+  \mathrm{Co}^2 = \frac{\mathrm{Ra}\mathrm{Ek}^2}{\mathrm{Pr}}
+\end{equation}
+and:
+\begin{equation}
+  \frac{h_c}{(2\Omega L)^2} = \frac{1}{\gamma-1}\frac{\mathrm{Co}^2}{\mathrm{Ma}^{2}}
+\end{equation}
+
+and we end with:
+
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \del \vec{u} + \frac{1}{\gamma-1}\frac{\mathrm{Co}^2}{\mathrm{Ma}^{2}}\del (h_0[\exp(\theta)-1]) =
+  \frac{1}{\gamma-1}\frac{\mathrm{Co}^2}{\mathrm{Ma}^{2}} h_0\exp(\theta)\del s
+  + \mathrm{Ek}\frac{1}{\rho_0}\exp(-\Upsilon)\del\cdot (E_{ij}) - \vec{\hat{z}} \times \vec{u},
+\end{equation}
+
+The entropy equation is:
+\begin{equation}
+  \partial_t s + \vec{u}\cdot \del s =
+  \frac{\mathrm{Ek}}{\mathrm{Pr}} \frac{1}{\rho_0} \exp(-\Upsilon)\mathcal{D}^2(\theta)
+  + \mathrm{Ek} (\gamma-1)\frac{\mathrm{Ma}^{2}}{\mathrm{Co}^2} \frac{1}{2}\frac{1}{\rho_0 h_0}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)
+  + \frac{1}{2 \Omega} \frac{\mathcal{S}}{c_P}
+\end{equation}
+
 \end{document}
 
 
