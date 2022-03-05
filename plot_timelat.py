@@ -120,13 +120,14 @@ std_dev = np.std(data_avg)
 image_min = max(np.min(data_avg), avg-3*std_dev)
 image_max = min(np.max(data_avg), avg+3*std_dev)
 
-if center_zero and image_min > 0:
-    image_min = -1*image_max
-if center_zero and image_max < 0:
-    image_max = -1*image_min
-print(image_min, image_max)
-fig_data, pcm = cylinder_plot(r, theta, data_avg, cmap=cmap, title='{:s}'.format(title), min=image_min, max=image_max, center_zero=center_zero)
-fig_data.savefig('{:s}/{:s}_{:.0f}_{:.0f}.png'.format(str(output_path), filename, times[0], times[-1]), dpi=600)
+if args['--window']:
+    if center_zero and image_min > 0:
+        image_min = -1*image_max
+    if center_zero and image_max < 0:
+        image_max = -1*image_min
+    print(image_min, image_max)
+    fig_data, pcm = cylinder_plot(r, theta, data_avg, cmap=cmap, title='{:s}'.format(title), min=image_min, max=image_max, center_zero=center_zero)
+    fig_data.savefig('{:s}/{:s}_{:.0f}_{:.0f}.png'.format(str(output_path), filename, times[0], times[-1]), dpi=600)
 
 # import dedalus_sphere.ball_wrapper as ball
 # L_max = N_theta = theta.shape[0]

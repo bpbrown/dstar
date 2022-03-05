@@ -71,6 +71,31 @@ for ax in ax_E:
     ax.set_yscale('log')
 fig_E.savefig('{:s}/log_energies.pdf'.format(str(output_path)))
 
+if MHD:
+    energy_keys = ['DRKE', 'MCKE', 'FKE', 'TME', 'PME', 'FME', 'PE']
+else:
+    energy_keys = ['DRKE', 'MCKE', 'FKE', 'PE']
+
+fig_E, ax_E = plt.subplots(nrows=2)
+for key in energy_keys:
+    ax_E[0].plot(t, data[key], label=key)
+for key in energy_keys[:-1]:
+    ax_E[1].plot(t, data[key], label=key)
+
+for ax in ax_E:
+    if subrange:
+        ax.set_xlim(t_min,t_max)
+    ax.set_xlabel('time')
+    ax.set_ylabel('energy density')
+    ax.legend(loc='lower left')
+fig_E.savefig('{:s}/energies_components.pdf'.format(str(output_path)))
+for ax in ax_E:
+    ax.set_yscale('log')
+    ymin,ymax = ax.get_ylim()
+    ax.set_ylim(max(ymin,1e-14),ymax)
+fig_E.savefig('{:s}/log_energies_components.pdf'.format(str(output_path)))
+
+
 fig_tau, ax_tau = plt.subplots(nrows=2)
 for i in range(2):
     ax_tau[i].plot(t, data['τ_u'], label=r'$\tau_{u}$')
@@ -106,9 +131,11 @@ fig_L.savefig('{:s}/angular_momentum.pdf'.format(str(output_path)))
 
 fig_f, ax_f = plt.subplots(nrows=2)
 for ax in ax_f:
-    ax.plot(t, data['Re'], label='Re')
+    p = ax.plot(t, data['Re'], label='Re')
+    ax.plot(t, data['Re_fluc'], linestyle='dashed', color=p[0].get_color())
     ax_r = ax.twinx()
-    ax_r.plot(t, data['Ro'], label='Ro', color='tab:orange')
+    p = ax_r.plot(t, data['Ro'], label='Ro', color='tab:orange')
+    ax_r.plot(t, data['Ro_fluc'], label='Ro', color=p[0].get_color(), linestyle='dashed')
     if subrange:
         ax.set_xlim(t_min,t_max)
     ax.set_xlabel('time')
