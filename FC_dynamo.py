@@ -218,26 +218,23 @@ if T['g'].size > 0 :
 h0 = T.copy()
 h0.name = 'h0'
 θ0 = np.log(h0).evaluate()
-θ0.name = 'θ0'
 Υ0 = lnρ.evaluate()
 Υ0.name = 'Υ0'
-ρ0 = np.exp(lnρ).evaluate()
+ρ0 = np.exp(Υ0).evaluate()
 ρ0.name = 'ρ0'
-ρ0_inv = np.exp(-lnρ).evaluate()
-ρ0_inv.name = 'ρ0_inv'
+ρ0_inv = np.exp(-Υ0).evaluate()
+ρ0_inv.name = '1/ρ0'
 grad_h0 = grad(h0).evaluate()
-grad_h0.name = 'grad_h0'
 grad_θ0 = grad(θ0).evaluate()
-grad_θ0.name='grad_θ0'
+grad_Υ0 = grad(Υ0).evaluate()
 
 h0_g = de.Grid(h0).evaluate()
-h0_g.name = 'h0_g'
 h0_inv_g = de.Grid(1/h0).evaluate()
-h0_inv_g.name = 'h0_inv_g'
 grad_h0_g = de.Grid(grad(h0)).evaluate()
-grad_h0_g.name = 'grad_h0_g'
 ρ0_g = de.Grid(ρ0).evaluate()
-ρ0_g.name = 'ρ0_g'
+
+ρ0_grad_h0_g = de.Grid(ρ0*grad(h0)).evaluate()
+ρ0_h0_g = de.Grid(ρ0*h0).evaluate()
 
 # Entropy source function, inspired from MESA model
 def source_function(r):
@@ -270,40 +267,38 @@ e = grad(u) + trans(grad(u))
 e.store_last = True
 
 ω = curl(u)
-#viscous_terms = div(e) + dot(grad_lnρ, e) - 2/3*grad(div(u)) - 2/3*grad_lnρ*div(u)
 viscous_terms = div(e) - 2/3*grad(div(u))
 trace_e = trace(e)
 trace_e.store_last = True
 Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
 logger.info("NCC expansions:")
-for ncc in [ρ0, (ρ0*grad(h0)).evaluate(), (ρ0*h0).evaluate(), (ρ0*grad(θ0)).evaluate()]:
-    logger.info("{}: {}".format(ncc, np.where(np.abs(ncc['c']) >= ncc_cutoff)[0].shape))
+for ncc in [ρ0, ρ0*grad(h0), ρ0*h0, ρ0*grad(θ0), h0*grad(Υ0)]:
+    logger.info("{}: {}".format(ncc.evaluate(), np.where(np.abs(ncc.evaluate()['c']) >= ncc_cutoff)[0].shape))
 
 
 #Problem
 problem = de.IVP([u, Υ, θ, s, φ, A, τ_u, τ_s, τ_φ, τ_A])
-# check cP terms, think about these messy-as-heck prefactors
-problem.add_equation((ρ0*(ddt(u) + scrC*grad(h0*θ) \
-                      - scrC*h0*grad(s)) \
-                      - Ek*viscous_terms \
+problem.add_equation((ρ0*(ddt(u) + scrC*(h0*grad(θ) + grad_h0*θ)
+                      - scrC*h0*grad(s))
+                      - Ek*viscous_terms
                       + lift(τ_u,-1),
-                      ρ0_g*(-dot(u,grad(u)) - cross(ez_g, u)) \
-                      # probably smartest to eval grad of exmp1 by hand...
-                      -scrC*ρ0_g*( grad_h0_g*(np.expm1(θ)-θ)
-                                 + h0_g*np.expm1(θ)*grad(θ) \
-                                 + h0_g*np.expm1(θ)*grad(s) ) \
+                      ρ0_g*(-dot(u,grad(u)) - cross(ez_g, u))
+                      -scrC*ρ0_grad_h0_g*(np.expm1(θ)-θ)
+                      -scrC*ρ0_h0_g*np.expm1(θ)*grad(θ)
+                      -scrC*ρ0_h0_g*np.expm1(θ)*grad(s)
                       + np.exp(-Υ)*cross(J,B) ))
-problem.add_equation((ddt(Υ) + div(u) + dot(u, grad(Υ0)),
-                      -dot(u, grad(Υ)) ))
+problem.add_equation((h0*(ddt(Υ) + div(u) + dot(u, grad_Υ0)),
+                      -h0_g*dot(u, grad(Υ)) ))
 problem.add_equation((θ - (γ-1)*Υ - γ*s, 0)) #EOS, s_c/cP = 1
 #TO-DO:
 # add ohmic heat
-problem.add_equation((ρ0*(ddt(s)) - Ek/Pr*(lap(θ)+2*dot(grad(θ0),grad(θ))) \
+problem.add_equation((ρ0*(ddt(s))
+                      - Ek/Pr*(lap(θ)+2*dot(grad_θ0,grad(θ)))
                       + lift(τ_s,-1),
-                      -ρ0_g*dot(u,grad(s)) \
-                      + Ek/Pr*dot(grad(θ),grad(θ)) \
-                      + Ek/scrC*0.5*h0_inv_g*Phi \
+                      - ρ0_g*dot(u,grad(s))
+                      + Ek/Pr*dot(grad(θ),grad(θ))
+                      + Ek/scrC*0.5*h0_inv_g*Phi
                       + source ))
 problem.add_equation((div(A) + τ_φ, 0)) # coulomb gauge
 # currently sets ρ = ρ0*exp(Υ) -> ρ0 (neglects exp(Υ), should appear in laplacian)
