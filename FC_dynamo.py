@@ -252,8 +252,9 @@ source_func['g'] = source_function(r)
 # for RHS source function, need θ0 on the full ball grid (rather than just the radial grid)
 θ0_RHS = d.Field(name='θ0_RHS', bases=b)
 θ0.change_scales(1)
-#θ0_RHS['c'] = θ0['c']
-θ0_RHS['g'] = θ0.allgather_data('g')
+θ0_RHS.require_grid_space()
+if θ0['g'].size > 0:
+    θ0_RHS['g'] = θ0['g']
 ε = Ma2
 source = de.Grid(Ek/Pr*(ε*ρ0/h0*source_func + lap(θ0_RHS) + dot(grad(θ0_RHS),grad(θ0_RHS)) ) ).evaluate()
 source.name='source'
