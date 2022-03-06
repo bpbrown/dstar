@@ -201,7 +201,9 @@ r_vec_g = de.Grid(r_vec).evaluate()
 r_S2 = d.VectorField(c, name='r_S2')
 r_S2['g'][2] = 1
 
-structure = lane_emden(Nr, n_rho=n_rho, m=1.5, comm=MPI.COMM_SELF)
+m_ad = 1/(γ-1)
+logger.info("solving lane emden with m = {:}".format(m_ad))
+structure = lane_emden(Nr, n_rho=n_rho, m=m_ad, comm=MPI.COMM_SELF)
 
 bk2 = b.clone_with(k=2)
 bk1 = b.clone_with(k=1)
@@ -209,10 +211,9 @@ T = d.Field(name='T', bases=b.radial_basis)
 lnρ = d.Field(name='lnρ', bases=b.radial_basis)
 
 if T['g'].size > 0 :
-    # TO-DO: clean this up and make work for lane-emden solve in np.float64 rather than np.complex128
     for i, r_i in enumerate(r[0,0,:]):
-         T['g'][:,:,i] = structure['T'](r=r_i).evaluate()['g'].real
-         lnρ['g'][:,:,i] = structure['lnρ'](r=r_i).evaluate()['g'].real
+        T['g'][:,:,i] = structure['T'](r=r_i).evaluate()['g']
+        lnρ['g'][:,:,i] = structure['lnρ'](r=r_i).evaluate()['g']
 
 #h0 = (T/cP).evaluate()
 h0 = T.copy()
@@ -252,10 +253,9 @@ source_func['g'] = source_function(r)
 θ0_RHS = d.Field(name='θ0_RHS', bases=b)
 θ0.change_scales(1)
 #θ0_RHS['c'] = θ0['c']
-#θ0_RHS['g'] = θ0['g']
+θ0_RHS['g'] = θ0.allgather_data('g')
 ε = Ma2
-#source = de.Grid(Ek/Pr*(ε*ρ0/T*source_func + lap(θ0_RHS) + dot(grad(θ0_RHS),grad(θ0_RHS)) ) ).evaluate()
-source = de.Grid(Ek/Pr*(ε*ρ0/T*source_func) ).evaluate()
+source = de.Grid(Ek/Pr*(ε*ρ0/h0*source_func + lap(θ0_RHS) + dot(grad(θ0_RHS),grad(θ0_RHS)) ) ).evaluate()
 source.name='source'
 
 B = curl(A)

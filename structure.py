@@ -7,7 +7,7 @@ dlog = logging.getLogger('subsystems')
 dlog.setLevel(logging.WARNING)
 
 def lane_emden(Nr, m=1.5, n_rho=3, radius=1,
-               ncc_cutoff = 1e-10, tolerance = 1e-10, dtype=np.complex128, comm=None):
+               ncc_cutoff = 1e-10, tolerance = 1e-10, dtype=np.float64, comm=None):
     # TO-DO: clean this up and make work for ncc ingestion in main script in np.float64 rather than np.complex128
     c = de.SphericalCoordinates('phi', 'theta', 'r')
     d = de.Distributor((c,), comm=comm, dtype=dtype)
@@ -40,13 +40,11 @@ def lane_emden(Nr, m=1.5, n_rho=3, radius=1,
         solver.newton_iteration()
         pert_norm = sum(pert.allreduce_data_norm('c', 2) for pert in solver.perturbations)
         logger.debug(f'Perturbation norm: {pert_norm:.3e}')
-    T = d.Field(name='T', bases=br)
-    ρ = d.Field(name='ρ', bases=br)
-    lnρ = d.Field(name='lnρ', bases=br)
-    T['g'] = f['g']
-    ρ['g'] = f['g']**m
-    lnρ['g'] = np.log(ρ['g'])
-
+    T = f.copy()
+    T.name='T'
+    lnρ = (m*np.log(T)).evaluate()
+    lnρ.name='lnρ'
+    
     structure = {'T':T,'lnρ':lnρ}
     for key in structure:
         structure[key].change_scales(1)
