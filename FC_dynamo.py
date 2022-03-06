@@ -215,7 +215,6 @@ if T['g'].size > 0 :
         T['g'][:,:,i] = structure['T'](r=r_i).evaluate()['g']
         lnρ['g'][:,:,i] = structure['lnρ'](r=r_i).evaluate()['g']
 
-#h0 = (T/cP).evaluate()
 h0 = T.copy()
 h0.name = 'h0'
 θ0 = np.log(h0).evaluate()
@@ -226,13 +225,17 @@ h0.name = 'h0'
 ρ0.name = 'ρ0'
 ρ0_inv = np.exp(-lnρ).evaluate()
 ρ0_inv.name = 'ρ0_inv'
+grad_h0 = grad(h0).evaluate()
+grad_h0.name = 'grad_h0'
 grad_θ0 = grad(θ0).evaluate()
 grad_θ0.name='grad_θ0'
 
 h0_g = de.Grid(h0).evaluate()
 h0_g.name = 'h0_g'
 h0_inv_g = de.Grid(1/h0).evaluate()
-h0_g.name = 'h0_inv_g'
+h0_inv_g.name = 'h0_inv_g'
+grad_h0_g = de.Grid(grad(h0)).evaluate()
+grad_h0_g.name = 'grad_h0_g'
 ρ0_g = de.Grid(ρ0).evaluate()
 ρ0_g.name = 'ρ0_g'
 
@@ -256,7 +259,7 @@ source_func['g'] = source_function(r)
 if θ0['g'].size > 0:
     θ0_RHS['g'] = θ0['g']
 ε = Ma2
-source = de.Grid(Ek/Pr*(ε*ρ0/h0*source_func + lap(θ0_RHS) + dot(grad(θ0_RHS),grad(θ0_RHS)) ) ).evaluate()
+source = de.Grid(Ek/Pr*(ε*ρ0/h0*source_func)).evaluate() # + lap(θ0_RHS) + dot(grad(θ0_RHS),grad(θ0_RHS)) ) ).evaluate()
 source.name='source'
 
 B = curl(A)
@@ -285,10 +288,11 @@ problem.add_equation((ρ0*(ddt(u) + scrC*grad(h0*θ) \
                       - scrC*h0*grad(s)) \
                       - Ek*viscous_terms \
                       + lift(τ_u,-1),
-                      ρ0*(-dot(u,grad(u)) - cross(ez_g, u)) \
+                      ρ0_g*(-dot(u,grad(u)) - cross(ez_g, u)) \
                       # probably smartest to eval grad of exmp1 by hand...
-                      -scrC*ρ0*(grad(h0*(np.expm1(θ)-θ)) \
-                                + (h0_g*np.expm1(θ)*grad(s))) \
+                      -scrC*ρ0_g*( grad_h0_g*(np.expm1(θ)-θ)
+                                 + h0_g*np.expm1(θ)*grad(θ) \
+                                 + h0_g*np.expm1(θ)*grad(s) ) \
                       + np.exp(-Υ)*cross(J,B) ))
 problem.add_equation((ddt(Υ) + div(u) + dot(u, grad(Υ0)),
                       -dot(u, grad(Υ)) ))
