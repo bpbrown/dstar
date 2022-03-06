@@ -12,6 +12,8 @@
 \newcommand{\pomega}{\varpi}
 \newcommand{\conv}{\boldsymbol}
 
+\newcommand{\scrB}{\mathcal{B}}
+\newcommand{\scrC}{\mathcal{C}}
 \newcommand{\scrD}{\mathcal{D}}
 \newcommand{\scrH}{\mathcal{H}}
 \newcommand{\scrR}{\mathcal{R}}
@@ -215,7 +217,7 @@ The momentum equation is:
 The entropy equation is:
 \begin{equation}
   \partial_t s + \vec{u}\cdot \del s =
-  \frac{K \tau}{c_P \rho_c L^2}\left(\frac{s_c}{c_P}\right) \frac{1}{\rho_0} \exp(-\Upsilon)\mathcal{D}^2(\theta)
+  \frac{K \tau}{c_P \rho_c L^2}\left(\frac{s_c}{c_P}\right) \frac{1}{\rho_0} \exp(-\Upsilon)\scrD^2(\theta)
   + \frac{\mu}{2 \tau \rho_c h_c}\left(\frac{s_c}{c_P}\right) \frac{1}{\rho_0 h_0}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)
   + \tau \left(\frac{s_c}{c_P}\right)\frac{\scrS}{c_P}
 \end{equation}
@@ -419,6 +421,68 @@ Well, let's go with it for now.
   &\phantom{=}+ \mathrm{Ek} (\gamma-1)\frac{\mathrm{Ma}^{2}}{\mathrm{Co}^2} \frac{1}{2}\frac{1}{\rho_0 h_0}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)\nonumber\\
   &\phantom{=}+ \frac{\mathrm{Ek}}{\mathrm{Pr}}\left[Q \frac{q(r)}{h_0}\exp(-\theta) +  \frac{1}{\rho_0} \exp(-\Upsilon) \left(\nabla^2 \ln h_0 + (\nabla \ln h_0)^2 \right)\right]
 \end{align}
+
+\subsection{De-stiffening acoustic modes}
+Now, let's use our experience with de-stiffening these equations, and let's put these in implicit/explicit form.  First, let's clean things up by letting:
+\begin{equation}
+  \scrC \equiv \frac{1}{\gamma-1}\frac{\mathrm{Co}^2}{\mathrm{Ma}^{2}}
+\end{equation}
+
+\begin{multline}
+  \partial_t \vec{u}
+  + \scrC \del (h_0 \theta)
+  - \scrC h_0 \del s
+  - \mathrm{Ek}\frac{1}{\rho_0}\del\cdot (E_{ij})
+  =
+  - \vec{u}\cdot \del \vec{u} - \vec{\hat{z}} \times \vec{u} \\
+  - \scrC \del (h_0[\exp(\theta)-\theta - 1])
+  + \scrC h_0\left[\exp(\theta)-1\right]\del s
+  + \mathrm{Ek}\frac{1}{\rho_0}\left[\exp(-\Upsilon)-1\right]\del\cdot (E_{ij}),
+\end{multline}
+or, adopting the $\expm = \exp - 1$ operator:
+\begin{multline}
+  \partial_t \vec{u}
+  + \scrC \del (h_0 \theta)
+  - \scrC h_0 \del s
+  - \mathrm{Ek}\frac{1}{\rho_0}\del\cdot (E_{ij})
+  =
+  - \vec{u}\cdot \del \vec{u} - \vec{\hat{z}} \times \vec{u} \\
+  - \scrC \del (h_0[\expm(\theta)-\theta])
+  + \scrC h_0 \expm(\theta)\del s
+  + \mathrm{Ek}\frac{1}{\rho_0}\expm(-\Upsilon) \del\cdot (E_{ij}),
+\end{multline}
+
+\begin{align}
+  \partial_t s
+  - \frac{\mathrm{Ek}}{\mathrm{Pr}} \frac{1}{\rho_0} \left[\nabla^2 \theta + 2\left(\nabla \ln h_0 \cdot \nabla \theta \right)\right]
+   &= - \vec{u}\cdot \del s \nonumber \\
+  &\phantom{=}+ \frac{\mathrm{Ek}}{\mathrm{Pr}} \frac{1}{\rho_0} \expm(-\Upsilon)\left[\nabla^2 \theta + 2\left(\nabla \ln h_0 \cdot \nabla \theta \right)\right]
+  + \frac{\mathrm{Ek}}{\mathrm{Pr}} \frac{1}{\rho_0} \exp(-\Upsilon) \left[\left(\nabla \theta \right)^2\right] \nonumber\\
+  &\phantom{=}+  \frac{\mathrm{Ek}}{\scrC} \frac{1}{2}\frac{1}{\rho_0 h_0}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)\nonumber\\
+  &\phantom{=}+ \frac{\mathrm{Ek}}{\mathrm{Pr}}\left[Q \frac{q(r)}{h_0}\exp(-\theta) +  \frac{1}{\rho_0} \exp(-\Upsilon) \left(\nabla^2 \ln h_0 + (\nabla \ln h_0)^2 \right)\right]
+\end{align}
+
+\subsection{Now, ignore nonlinearities in diffusion and 1/h terms}
+\begin{multline}
+  \partial_t \vec{u}
+  + \scrC \del (h_0 \theta)
+  - \scrC h_0 \del s
+  - \mathrm{Ek}\frac{1}{\rho_0}\del\cdot (E_{ij})
+  =
+  - \vec{u}\cdot \del \vec{u} - \vec{\hat{z}} \times \vec{u}
+  - \scrC \del (h_0[\expm(\theta)-\theta])
+  + \scrC h_0 \expm(\theta)\del s
+\end{multline}
+
+\begin{align}
+  \partial_t s
+  - \frac{\mathrm{Ek}}{\mathrm{Pr}} \frac{1}{\rho_0} \left[\nabla^2 \theta + 2\left(\nabla \ln h_0 \cdot \nabla \theta \right)\right]
+   &= - \vec{u}\cdot \del s +
+  \frac{\mathrm{Ek}}{\mathrm{Pr}} \frac{1}{\rho_0} \left[\left(\nabla \theta \right)^2\right]
+  +  \frac{\mathrm{Ek}}{\scrC} \frac{1}{2}\frac{1}{\rho_0 h_0}\mathrm{Tr}(E^2)\nonumber\\
+  &\phantom{=}+ \frac{\mathrm{Ek}}{\mathrm{Pr}}\left[Q \frac{q(r)}{h_0} +  \frac{1}{\rho_0} \left(\nabla^2 \ln h_0 + (\nabla \ln h_0)^2 \right)\right]
+\end{align}
+
 
 \section{Being smarter}
 I think we could do better by considering:
