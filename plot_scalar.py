@@ -145,10 +145,24 @@ for ax in ax_f:
 ax_f[1].set_yscale('log')
 ax_r.set_yscale('log') # relies on it being the last instance; poor practice
 
-fig_f.savefig('{:s}/Re_and_Ro.pdf'.format(str(output_path)))
+fig_f.savefig('{:s}/fluid_parameters.pdf'.format(str(output_path)))
+
+fig_f, ax_f = plt.subplots(nrows=2)
+for ax in ax_f:
+    p = ax.plot(t, np.sqrt(data['Ma2']), label='Ma')
+    if subrange:
+        ax.set_xlim(t_min,t_max)
+    ax.set_xlabel('time')
+    ax.set_ylabel('fluid parameters')
+    ax.legend(loc='lower left')
+
+ax_f[1].set_yscale('log')
+ax_r.set_yscale('log') # relies on it being the last instance; poor practice
+fig_f.savefig('{:s}/Mach_number.pdf'.format(str(output_path)))
+
 
 if MHD:
-    benchmark_set = ['KE', 'ME', 'ME/KE', 'PE', 'Re', 'Ro', 'Lz', 'τ_u', 'τ_s', 'τ_p', 'τ_A', 'τ_φ']
+    benchmark_set = ['KE', 'ME', 'ME/KE', 'PE', 'Re', 'Ro', 'Lz', 'τ_u', 'τ_s', 'τ_A', 'τ_φ']
     data['ME/KE'] = data['ME']/data['KE']
 else:
     benchmark_set = ['KE', 'PE', 'Re', 'Ro', 'Lz', 'τ_u', 'τ_s', 'τ_p']

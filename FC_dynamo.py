@@ -134,7 +134,7 @@ logger.debug(sys.argv)
 logger.debug('-'*40)
 logger.info("saving data in {}".format(data_dir))
 logger.info("Run parameters")
-logger.info("Ek = {}, Co2 = {}, Ma ={}, Pr = {}, Pm = {}".format(Ek,Co2,Ma,Pr, Pm))
+logger.info("Ek = {}, Co2 = {}, Ma = {}, Pr = {}, Pm = {}".format(Ek,Co2,Ma,Pr, Pm))
 scrC = 1/(gamma-1)*Co2/Ma2
 logger.info("scrC = {:}, Co2 = {:}, Ma2 = {:}".format(scrC, Co2, Ma2))
 
@@ -155,7 +155,6 @@ s = d.Field(name='s', bases=b)
 u = d.VectorField(c, name='u', bases=b)
 A = d.VectorField(c, name="A", bases=b)
 φ = d.Field(name="φ", bases=b)
-τ_p = d.Field(name='τ_p')
 τ_φ = d.Field(name="τ_φ")
 τ_s = d.Field(name='τ_s', bases=b_S2)
 τ_u = d.VectorField(c, name='τ_u', bases=b_S2)
@@ -243,18 +242,20 @@ def source_function(r):
     Q0_over_Q1 = 10.969517734412433
     # normalization from Brown et al 2020
     Q1 = σ**-2/(Q0_over_Q1 + 1) # normalize to σ**-2 at r=0
-    logger.info("Source function: Q0/Q1 = {:}, σ = {:}, Q1 = {:}".format(Q0_over_Q1, σ, Q1))
+    logger.info("Source function: Q0/Q1 = {:.3g}, σ = {:.3g}, Q1 = {:.3g}".format(Q0_over_Q1, σ, Q1))
     return (Q0_over_Q1*np.exp(-r**2/(2*σ**2)) + 1)*Q1
 
 source_func = d.Field(name='S', bases=b)
 source_func['g'] = source_function(r)
 
 # for RHS source function, need θ0 on the full ball grid (rather than just the radial grid)
-θ0_gg = d.Field(name='θ0_g', bases=b)
+θ0_RHS = d.Field(name='θ0_RHS', bases=b)
 θ0.change_scales(1)
-θ0_gg['g'] = θ0['g']
+#θ0_RHS['c'] = θ0['c']
+#θ0_RHS['g'] = θ0['g']
 ε = Ma2
-source = de.Grid(Ek/Pr*(ε*ρ0/T*source_func + lap(θ0_gg) + dot(grad(θ0_gg),grad(θ0_gg)) ) ).evaluate()
+#source = de.Grid(Ek/Pr*(ε*ρ0/T*source_func + lap(θ0_RHS) + dot(grad(θ0_RHS),grad(θ0_RHS)) ) ).evaluate()
+source = de.Grid(Ek/Pr*(ε*ρ0/T*source_func) ).evaluate()
 source.name='source'
 
 B = curl(A)
@@ -445,7 +446,7 @@ TME.store_last = True
 PME.store_last = True
 FME.store_last = True
 
-PE = Co2*ρ*T*s
+PE = scrC*ρ*T*s
 PE.name = 'PE'
 PE.store_last = True
 
@@ -481,7 +482,6 @@ traces.add_task(np.sqrt(avg(enstrophy_fluc)), name='Ro_fluc')
 traces.add_task(np.sqrt(avg(Re2_fluc)), name='Re_fluc')
 traces.add_task(avg(PE), name='PE')
 traces.add_task(avg(Lz), name='Lz')
-traces.add_task(np.abs(τ_p), name='τ_p')
 traces.add_task(np.abs(τ_φ), name='τ_φ')
 traces.add_task(shellavg(np.abs(τ_s)), name='τ_s')
 traces.add_task(shellavg(np.sqrt(dot(τ_u,τ_u))), name='τ_u')
@@ -502,7 +502,7 @@ slices.add_task(shellavg(-Co2*Ek/Pr*T*dot(er, grad(s))), name='F_κ(r)')
 slices.add_task(shellavg(Co2*source), name='F_source(r)')
 slices.add_task(Br(r=radius), name='Br') # is this sufficient?  Should we be using radial(B) instead?
 
-report_cadence = 1
+report_cadence = 100
 flow = flow_tools.GlobalFlowProperty(solver, cadence=report_cadence)
 flow.add_property(Re2, name='Re2')
 flow.add_property(enstrophy, name='Ro2')
@@ -514,7 +514,6 @@ flow.add_property(Ma2_ad, name='Ma2')
 flow.add_property(PE, name='PE')
 flow.add_property(Lz, name='Lz')
 flow.add_property(np.abs(τ_s), name='|τ_s|')
-flow.add_property(np.abs(τ_p), name='|τ_p|')
 flow.add_property(np.sqrt(dot(τ_u,τ_u)), name='|τ_u|')
 flow.add_property(np.sqrt(dot(τ_A,τ_A)), name='|τ_A|')
 
@@ -539,7 +538,7 @@ while solver.proceed and good_solution:
         ME_avg = flow.volume_integral('ME')/vol
         Lz_avg = flow.volume_integral('Lz')/vol
         Ma_avg = np.sqrt(flow.volume_integral('Ma2')/vol)
-        max_τ = np.max([flow.max('|τ_u|'), flow.max('|τ_s|'), flow.max('|τ_p|')])
+        max_τ = np.max([flow.max('|τ_u|'), flow.max('|τ_s|')])
 
         log_string = "iter: {:d}, dt={:.1e}, t={:.3e} ({:.2e})".format(solver.iteration, dt, solver.sim_time, solver.sim_time*Ek)
         log_string += ", Ma={:.2e}, KE={:.2e}, ME={:.2e}, PE={:.2e}".format(Ma_avg, KE_avg, ME_avg, PE_avg)
