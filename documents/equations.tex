@@ -179,19 +179,19 @@ The entropy equation is a bit more complicated, since we have quadratic terms in
 %\frac{K(r)}{\rho_0}\exp(-\Upsilon)\left[
 
 \begin{equation}
-  \partial_t s + \vec{u}\cdot \del s = \frac{K(r)}{\rho_0} \exp(-\Upsilon)\mathcal{D}^2(\theta) + \frac{c_P \mu}{2 \rho_0 h_0} \exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2) + \mathcal{S}
+  \partial_t s + \vec{u}\cdot \del s = \frac{K(r)}{\rho_0} \exp(-\Upsilon)\scrD^2(\theta) + \frac{c_P \mu}{2 \rho_0 h_0} \exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2) + \scrS
 \end{equation}
 with:
 \begin{equation}
-\mathcal{D}^2(\theta) = \nabla^2 \theta + 2\left(\nabla \ln h_0 \cdot \nabla \theta \right) + \left(\nabla \theta \right)^2 + \del \ln K \cdot \del \theta
+\scrD^2(\theta) = \nabla^2 \theta + 2\left(\nabla \ln h_0 \cdot \nabla \theta \right) + \left(\nabla \theta \right)^2 + \del \ln K \cdot \del \theta
 \end{equation}
 and with:
 \begin{equation}
-\mathcal{S} = c_P \epsilon \frac{1}{h_0}\exp(-\theta) + \frac{K(r)}{h_0 \rho_0} \exp(-\Upsilon) \left[\nabla^2 h_0 + \del \ln K \cdot \del h_0 \right]
+\scrS = c_P \epsilon \frac{1}{h_0}\exp(-\theta) + \frac{K(r)}{h_0 \rho_0} \exp(-\Upsilon) \left[\nabla^2 h_0 + \del \ln K \cdot \del h_0 \right]
 \end{equation}
 or
 \begin{equation}
-\mathcal{S} = c_P \epsilon \frac{1}{h_0}\exp(-\theta) + \frac{K(r)}{\rho_0} \exp(-\Upsilon) \nabla^2 \ln h_0 + (\nabla \ln h_0)^2
+\scrS = c_P \epsilon \frac{1}{h_0}\exp(-\theta) + \frac{K(r)}{\rho_0} \exp(-\Upsilon) \nabla^2 \ln h_0 + (\nabla \ln h_0)^2
 + \del \ln K \cdot \del \ln h_0
 \end{equation}
 depending on preferences about forms of NCCs (this is all RHS anyways, so it's a bit academic).
@@ -217,15 +217,15 @@ The entropy equation is:
   \partial_t s + \vec{u}\cdot \del s =
   \frac{K \tau}{c_P \rho_c L^2}\left(\frac{s_c}{c_P}\right) \frac{1}{\rho_0} \exp(-\Upsilon)\mathcal{D}^2(\theta)
   + \frac{\mu}{2 \tau \rho_c h_c}\left(\frac{s_c}{c_P}\right) \frac{1}{\rho_0 h_0}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)
-  + \tau \left(\frac{s_c}{c_P}\right)\frac{\mathcal{S}}{c_P}
+  + \tau \left(\frac{s_c}{c_P}\right)\frac{\scrS}{c_P}
 \end{equation}
 with
 \begin{equation}
-\frac{\mathcal{S}}{c_P} = \frac{K}{c_P \rho_c} \left[\frac{\epsilon}{h_c} \frac{c_P \rho_c}{K}\frac{1}{h_0}\exp(-\theta) +  \frac{1}{\rho_0} \exp(-\Upsilon) \nabla^2 \ln h_0 + (\nabla \ln h_0)^2 \right]
+\frac{\scrS}{c_P} = \frac{K/(c_P \rho_c)}{L^2} \left[\frac{\epsilon}{h_c} \frac{L^2}{K/(c_P \rho_c)}\frac{1}{h_0}\exp(-\theta) +  \frac{1}{\rho_0} \exp(-\Upsilon) \nabla^2 \ln h_0 + (\nabla \ln h_0)^2 \right]
 \end{equation}
 and
 \begin{equation}
-\mathcal{D}^2(\theta) = \nabla^2 \theta + 2\left(\nabla \ln h_0 \cdot \nabla \theta \right) + \left(\nabla \theta \right)^2
+\scrD^2(\theta) = \nabla^2 \theta + 2\left(\nabla \ln h_0 \cdot \nabla \theta \right) + \left(\nabla \theta \right)^2
 \end{equation}
 
 The equation of state is:
@@ -251,9 +251,9 @@ Now it's time to make some choices.  What should we use for $s_c$ and what shoul
 
 \begin{equation}
   \partial_t s + \vec{u}\cdot \del s =
-  \frac{K}{c_P \rho_c u_c L} \frac{1}{\rho_0} \exp(-\Upsilon)\mathcal{D}^2(\theta)
+  \frac{K}{c_P \rho_c u_c L} \frac{1}{\rho_0} \exp(-\Upsilon)\scrD^2(\theta)
   + \frac{\mu}{2 \rho_c u_c L}\frac{u_c^2}{h_c}\frac{1}{\rho_0 h_0}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)
-  + \frac{L}{u_c}\frac{\mathcal{S}}{c_P}
+  + \frac{L}{u_c}\frac{\scrS}{c_P}
 \end{equation}
 
 \begin{equation}
@@ -271,9 +271,9 @@ Now, let $\scrR = u_c L \rho_c/\mu$ and $\scrP = u_c L c_P \rho_c /K = \mathrm{P
 
 \begin{equation}
   \partial_t s + \vec{u}\cdot \del s =
-  \frac{1}{\scrP} \frac{1}{\rho_0} \exp(-\Upsilon)\mathcal{D}^2(\theta)
+  \frac{1}{\scrP} \frac{1}{\rho_0} \exp(-\Upsilon)\scrD^2(\theta)
   + \frac{1}{\scrR}(\gamma-1)\mathrm{Ma}^2 \frac{1}{\rho_0 h_0}\frac{1}{2}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)
-  + \frac{L}{u_c}\frac{\mathcal{S}}{c_P}
+  + \frac{L}{u_c}\frac{\scrS}{c_P}
 \end{equation}
 
 
@@ -286,9 +286,9 @@ Now, let $\scrR = u_c L \rho_c/\mu$ and $\scrP = u_c L c_P \rho_c /K = \mathrm{P
 The entropy equation is:
 \begin{equation}
   \partial_t s + \vec{u}\cdot \del s =
-  \frac{K/(c_P \rho_c)}{2 \Omega L^2} \frac{1}{\rho_0} \exp(-\Upsilon)\mathcal{D}^2(\theta)
+  \frac{K/(c_P \rho_c)}{2 \Omega L^2} \frac{1}{\rho_0} \exp(-\Upsilon)\scrD^2(\theta)
   + \frac{\mu/\rho_c}{2\Omega L^2} \frac{(2\Omega L)^2}{h_c} \frac{1}{2 }\frac{1}{\rho_0 h_0}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)
-  + \frac{1}{2 \Omega} \frac{\mathcal{S}}{c_P}
+  + \frac{1}{2 \Omega} \frac{\scrS}{c_P}
 \end{equation}
 
 And if we take $\mathrm{Ek} = (\mu/\rho_c)/(2 \Omega L^2)$ then these look like:
@@ -300,9 +300,9 @@ And if we take $\mathrm{Ek} = (\mu/\rho_c)/(2 \Omega L^2)$ then these look like:
 The entropy equation is:
 \begin{equation}
   \partial_t s + \vec{u}\cdot \del s =
-  \frac{\mathrm{Ek}}{\mathrm{Pr}} \frac{1}{\rho_0} \exp(-\Upsilon)\mathcal{D}^2(\theta)
+  \frac{\mathrm{Ek}}{\mathrm{Pr}} \frac{1}{\rho_0} \exp(-\Upsilon)\scrD^2(\theta)
   + \mathrm{Ek} \left(\frac{(2\Omega L)^2}{h_c}\right) \frac{1}{2}\frac{1}{\rho_0 h_0}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)
-  + \frac{1}{2 \Omega} \frac{\mathcal{S}}{c_P}
+  + \frac{1}{2 \Omega} \frac{\scrS}{c_P}
 \end{equation}
 
 We're left with an interesting term in these equations: $\left(h_c/(2\Omega L)^2\right)$.  Let's see what we can turn that into.
@@ -354,10 +354,78 @@ and we end with:
 The entropy equation is:
 \begin{equation}
   \partial_t s + \vec{u}\cdot \del s =
-  \frac{\mathrm{Ek}}{\mathrm{Pr}} \frac{1}{\rho_0} \exp(-\Upsilon)\mathcal{D}^2(\theta)
+  \frac{\mathrm{Ek}}{\mathrm{Pr}} \frac{1}{\rho_0} \exp(-\Upsilon)\scrD^2(\theta)
   + \mathrm{Ek} (\gamma-1)\frac{\mathrm{Ma}^{2}}{\mathrm{Co}^2} \frac{1}{2}\frac{1}{\rho_0 h_0}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)
-  + \frac{1}{2 \Omega} \frac{\mathcal{S}}{c_P}
+  + \frac{1}{2 \Omega} \frac{\scrS}{c_P}
 \end{equation}
+
+\subsubsection{Grappling with the source term}
+Time to finally grapple with the source term.
+
+\begin{align}
+  \frac{1}{2 \Omega} \frac{\scrS}{c_P}
+&= \frac{K/(c_P \rho_c)}{2 \Omega L^2} \left[\frac{\epsilon}{h_c} \frac{L^2}{K/(c_P \rho_c)}\frac{1}{h_0}\exp(-\theta) +  \frac{1}{\rho_0} \exp(-\Upsilon) \left(\nabla^2 \ln h_0 + (\nabla \ln h_0)^2 \right)\right] \nonumber \\
+&= \frac{\mathrm{Ek}}{\mathrm{Pr}}\left[\frac{\epsilon}{h_c} \frac{L^2}{K/(c_P \rho_c)}\frac{1}{h_0}\exp(-\theta) +  \frac{1}{\rho_0} \exp(-\Upsilon) \left(\nabla^2 \ln h_0 + (\nabla \ln h_0)^2 \right)\right]
+\end{align}
+
+What do we do now?  Let's consider thermal and hydrostatic equilibrium for a moment.  In that case:
+\begin{align}
+\frac{\epsilon}{h_c} \frac{L^2}{K/(c_P \rho_c)}\frac{1}{h_0} +  \frac{1}{\rho_0} \left(\nabla^2 \ln h_0 + (\nabla \ln h_0)^2 \right) = 0
+\end{align}
+From the equation of state:
+\begin{equation}
+  \gamma \nabla^2 s_0 = \nabla^2 \ln h_0 - (\gamma-1)\nabla \ln \rho_0
+\end{equation}
+or:
+\begin{align}
+\frac{\epsilon}{h_c} \frac{L^2}{K/(c_P \rho_c)}\frac{1}{h_0} +  \frac{1}{\rho_0} \left(\gamma \nabla^2 s_0 + (\gamma-1)\nabla \ln \rho_0 + (\nabla \ln h_0)^2 \right) = 0
+\end{align}
+and:
+\begin{align}
+ \gamma \nabla^2 s_0 = - \rho_0 \frac{\epsilon}{h_c} \frac{L^2}{K/(c_P \rho_c)}\frac{1}{h_0} - (\gamma-1)\nabla \ln \rho_0 - (\nabla \ln h_0)^2
+\end{align}
+and taking:
+\begin{equation}
+  \Delta s_0 \sim L^2 \nabla^2 s_0
+\end{equation}
+we get:
+\begin{align}
+ \Delta s_0 \sim - \frac{L^2}{\gamma} \frac{\epsilon}{h_c} \frac{L^2}{K/(c_P \rho_c)}\frac{\rho_0}{h_0}
+\end{align}
+It would clearly be nifty if $\Delta s_0$ was approximately constant as we change for example $K$, and this suggests $\epsilon$ scale with $K$ and that we take
+\begin{equation}
+Q q(r)\equiv \frac{L^2}{\gamma} \frac{\epsilon(r)}{h_c} \frac{L^2}{K/(c_P \rho_c)}
+\end{equation}
+with $q(r)$ the shape function of the heating,
+in which case we get
+\begin{align}
+ \Delta s_0 \sim - Q\frac{q(r) \rho_0}{h_0}
+\end{align}
+and we expect that $\mathrm{Ma}^2 \propto \Delta s_0 \propto Q$ and we now have a control parameter for adjusting the Mach number.  Maybe.
+
+Well, let's go with it for now.
+
+\subsection{Equations from on high}
+
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \del \vec{u} + \frac{1}{\gamma-1}\frac{\mathrm{Co}^2}{\mathrm{Ma}^{2}}\del (h_0[\exp(\theta)-1]) =
+  \frac{1}{\gamma-1}\frac{\mathrm{Co}^2}{\mathrm{Ma}^{2}} h_0\exp(\theta)\del s
+  + \mathrm{Ek}\frac{1}{\rho_0}\exp(-\Upsilon)\del\cdot (E_{ij}) - \vec{\hat{z}} \times \vec{u},
+\end{equation}
+
+\begin{align}
+  \partial_t s + \vec{u}\cdot \del s &=
+  \frac{\mathrm{Ek}}{\mathrm{Pr}} \frac{1}{\rho_0} \exp(-\Upsilon)\scrD^2(\theta) \nonumber\\
+  &\phantom{=}+ \mathrm{Ek} (\gamma-1)\frac{\mathrm{Ma}^{2}}{\mathrm{Co}^2} \frac{1}{2}\frac{1}{\rho_0 h_0}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)\nonumber\\
+  &\phantom{=}+ \frac{\mathrm{Ek}}{\mathrm{Pr}}\left[Q \frac{q(r)}{h_0}\exp(-\theta) +  \frac{1}{\rho_0} \exp(-\Upsilon) \left(\nabla^2 \ln h_0 + (\nabla \ln h_0)^2 \right)\right]
+\end{align}
+
+\section{Being smarter}
+I think we could do better by considering:
+\begin{equation}
+  \epsilon = \del \cdot \vec{q}
+\end{equation}
+and considering the flux associated with the heating.  But that's for later.
 
 \end{document}
 
