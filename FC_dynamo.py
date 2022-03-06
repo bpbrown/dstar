@@ -7,11 +7,14 @@ Usage:
     FC_hydro.py [options]
 
 Options:
-    --Ekman=<Ekman>                      Ekman number    [default: 5e-5]
-    --ConvectiveRossbySq=<Co2>           Squared Convective Rossby = Ra*Ek**2/Pr [default: 7e-3]
+    --Ekman=<Ekman>                      Ekman number    [default: 1e-4]
+    --ConvectiveRossbySq=<Co2>           Squared Convective Rossby = Ra*Ek**2/Pr [default: 1e-1]
+    --Mach=<Ma>                          Mach number [default: 1e-2]
     --Prandtl=<Prandtl>                  Prandtl number  [default: 1]
     --MagneticPrandtl=<Pm>               Magnetic Prandtl number [default: 1]
+    --gamma=<gamma>                      Ideal gas gamma [default: 5/3]
     --n_rho=<n_rho>                      Density scale heights [default: 3]
+
 
     --Ntheta=<Ntheta>                    Latitudinal modes [default: 32]
     --Nr=<Nr>                            Radial modes [default: 32]
@@ -48,6 +51,7 @@ import pathlib
 import os
 import sys
 import h5py
+from fractions import Fraction
 
 from mpi4py import MPI
 
@@ -66,7 +70,7 @@ dlog = logging.getLogger('evaluator')
 dlog.setLevel(logging.WARNING)
 
 data_dir = sys.argv[0].split('.py')[0]
-data_dir += '_Co{}_Ek{}_Pr{}_Pm{}'.format(args['--ConvectiveRossbySq'],args['--Ekman'],args['--Prandtl'],args['--MagneticPrandtl'])
+data_dir += '_Co{}_Ma{}_Ek{}_Pr{}_Pm{}'.format(args['--ConvectiveRossbySq'],args['--Mach'],args['--Ekman'],args['--Prandtl'],args['--MagneticPrandtl'])
 data_dir += '_Th{}_R{}'.format(args['--Ntheta'], args['--Nr'])
 if args['--thermal_equilibrium']:
     data_dir += '_therm'
@@ -116,6 +120,9 @@ radius = 1
 
 Ek = Ekman = float(args['--Ekman'])
 Co2 = ConvectiveRossbySq = float(args['--ConvectiveRossbySq'])
+Ma = float(args['--Mach'])
+Ma2 = Ma*Ma
+γ = gamma = float(Fraction(args['--gamma']))
 Pr = Prandtl = float(args['--Prandtl'])
 Pm = MagneticPrandtl = float(args['--MagneticPrandtl'])
 
@@ -127,11 +134,11 @@ logger.debug(sys.argv)
 logger.debug('-'*40)
 logger.info("saving data in {}".format(data_dir))
 logger.info("Run parameters")
-logger.info("Ek = {}, Co2 = {}, Pr = {}, Pm = {}".format(Ek,Co2,Pr, Pm))
+logger.info("Ek = {}, Co2 = {}, Ma ={}, Pr = {}, Pm = {}".format(Ek,Co2,Ma,Pr, Pm))
+scrC = 1/(gamma-1)*Co2/Ma2
+logger.info("scrC = {:}, Co2 = {:}, Ma2 = {:}".format(scrC, Co2, Ma2))
 
 from structure import lane_emden
-
-
 
 dealias = float(args['--dealias'])
 
@@ -142,6 +149,8 @@ b_S2 = b.S2_basis()
 phi, theta, r = b.local_grids()
 
 p = d.Field(name='p', bases=b)
+Υ = d.Field(name='Υ', bases=b)
+θ = d.Field(name='θ', bases=b)
 s = d.Field(name='s', bases=b)
 u = d.VectorField(c, name='u', bases=b)
 A = d.VectorField(c, name="A", bases=b)
@@ -152,7 +161,6 @@ A = d.VectorField(c, name="A", bases=b)
 τ_u = d.VectorField(c, name='τ_u', bases=b_S2)
 τ_A = d.VectorField(c, name="τ_A", bases=b_S2)
 
-# Parameters and operators
 # Parameters and operators
 div = lambda A: de.Divergence(A, index=0)
 lap = lambda A: de.Laplacian(A, c)
@@ -207,27 +215,26 @@ if T['g'].size > 0 :
          T['g'][:,:,i] = structure['T'](r=r_i).evaluate()['g'].real
          lnρ['g'][:,:,i] = structure['lnρ'](r=r_i).evaluate()['g'].real
 
-lnT = np.log(T).evaluate()
-lnT.name='lnT'
-grad_lnT = grad(lnT).evaluate()
-grad_lnT.name='grad_lnT'
-grad_lnT1 = d.VectorField(c,name='grad_lnT1', bases=bk2.radial_basis)
-grad_lnT.change_scales(1)
-grad_lnT1['g'] = grad_lnT['g']
-ρ = np.exp(lnρ).evaluate()
-ρ.name='ρ'
-ρ2 = d.Field(name='ρ2', bases=bk2.radial_basis)
-ρ.change_scales(1)
-ρ2['g'] = ρ['g']
-grad_lnρ = grad(lnρ).evaluate()
-grad_lnρ.name='grad_lnρ'
-ρT = (ρ*T).evaluate()
-ρT.name='ρT'
-ρT2 = d.Field(name='ρT2', bases=bk2.radial_basis)
-ρT.change_scales(1)
-ρT2['g'] = ρT['g']
-scale = T.evaluate()
-scale.name = 'scale'
+#h0 = (T/cP).evaluate()
+h0 = T.copy()
+h0.name = 'h0'
+θ0 = np.log(h0).evaluate()
+θ0.name = 'θ0'
+Υ0 = lnρ.evaluate()
+Υ0.name = 'Υ0'
+ρ0 = np.exp(lnρ).evaluate()
+ρ0.name = 'ρ0'
+ρ0_inv = np.exp(-lnρ).evaluate()
+ρ0_inv.name = 'ρ0_inv'
+grad_θ0 = grad(θ0).evaluate()
+grad_θ0.name='grad_θ0'
+
+h0_g = de.Grid(h0).evaluate()
+h0_g.name = 'h0_g'
+h0_inv_g = de.Grid(1/h0).evaluate()
+h0_g.name = 'h0_inv_g'
+ρ0_g = de.Grid(ρ0).evaluate()
+ρ0_g.name = 'ρ0_g'
 
 # Entropy source function, inspired from MESA model
 def source_function(r):
@@ -241,9 +248,13 @@ def source_function(r):
 
 source_func = d.Field(name='S', bases=b)
 source_func['g'] = source_function(r)
-ε = 1e-2
-#source = de.Grid(ε*Ek/Pr*1/T*source_func).evaluate()
-source = de.Grid(ε*Ek/Pr*scale/T*source_func).evaluate()
+
+# for RHS source function, need θ0 on the full ball grid (rather than just the radial grid)
+θ0_gg = d.Field(name='θ0_g', bases=b)
+θ0.change_scales(1)
+θ0_gg['g'] = θ0['g']
+ε = Ma2
+source = de.Grid(Ek/Pr*(ε*ρ0/T*source_func + lap(θ0_gg) + dot(grad(θ0_gg),grad(θ0_gg)) ) ).evaluate()
 source.name='source'
 
 B = curl(A)
@@ -260,42 +271,45 @@ trace_e = trace(e)
 trace_e.store_last = True
 Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
+logger.info("NCC expansions:")
+for ncc in [ρ0, (ρ0*grad(h0)).evaluate(), (ρ0*h0).evaluate(), (ρ0*grad(θ0)).evaluate()]:
+    logger.info("{}: {}".format(ncc, np.where(np.abs(ncc['c']) >= ncc_cutoff)[0].shape))
+
+
 #Problem
 problem = de.IVP([u, Υ, θ, s, φ, A, τ_u, τ_s, τ_φ, τ_A])
 # check cP terms, think about these messy-as-heck prefactors
-problem.add_equation((ρ2*(dt(u) + Ro2*cP/Ma2*(h0*grad(θ) + θ*grad(h0)) \
-                      - Ro2*cP*Sc/Ma2*(h0*grad(s) + h0*grad(s0)*θ) \
-                      - Ek*ρ0_inv*viscous_terms) \
-                      + lift(τu2,-1),
-                      ρ2*(-dot(u,grad(u)) - cross(ez_g, u) + ρ0_inv*exp(-Υ)*cross(J,B) \
-                                - Ro2*cP/Ma2*(grad(h0*(np.expm1(θ)-θ))) \
-                                + Ro2*cP/Ma2*(h0_g*np.expm1(θ)*grad(s) + h0_grad_s0_g*(np.expm1(θ)-θ))) )) # \
-problem.add_equation((scale*(ddt(Υ) + div(u) + dot(u, grad(Υ0))),
-                      scale*(-dot(u, grad(Υ))) ))
-problem.add_equation((θ - (γ-1)*Υ - γ*s, 0)) #EOS, cP absorbed into s.
+problem.add_equation((ρ0*(ddt(u) + scrC*grad(h0*θ) \
+                      - scrC*h0*grad(s)) \
+                      - Ek*viscous_terms \
+                      + lift(τ_u,-1),
+                      ρ0*(-dot(u,grad(u)) - cross(ez_g, u)) \
+                      # probably smartest to eval grad of exmp1 by hand...
+                      -scrC*ρ0*(grad(h0*(np.expm1(θ)-θ)) \
+                                + (h0_g*np.expm1(θ)*grad(s))) \
+                      + np.exp(-Υ)*cross(J,B) ))
+problem.add_equation((ddt(Υ) + div(u) + dot(u, grad(Υ0)),
+                      -dot(u, grad(Υ)) ))
+problem.add_equation((θ - (γ-1)*Υ - γ*s, 0)) #EOS, s_c/cP = 1
 #TO-DO:
 # add ohmic heat
-# add viscous heat
-# dot(u,grad(s0)) = 0
-# does κ/cP -> Ek/Pr or Ek/(Pr*cP)?
-problem.add_equation((scale*(ddt(s) - Ek/Pr*ρ0_inv*(lap(θ)+2*dot(grad(θ0),grad(θ))) + lift(τ_s,-1),
-                      scale*(-dot(u,grad(s)) + Ek/Pr*ρ0_inv_g*dot(grad(θ),grad(θ))) + source))
+problem.add_equation((ρ0*(ddt(s)) - Ek/Pr*(lap(θ)+2*dot(grad(θ0),grad(θ))) \
+                      + lift(τ_s,-1),
+                      -ρ0_g*dot(u,grad(s)) \
+                      + Ek/Pr*dot(grad(θ),grad(θ)) \
+                      + Ek/scrC*0.5*h0_inv_g*Phi \
+                      + source ))
 problem.add_equation((div(A) + τ_φ, 0)) # coulomb gauge
 # currently sets ρ = ρ0*exp(Υ) -> ρ0 (neglects exp(Υ), should appear in laplacian)
-problem.add_equation((ρ2*ddt(A) + ρ2*grad(φ) - Ek/Pm*lap(A) + lift(τ_A,-1),
-                        ρ2*cross(u, B) ))
+problem.add_equation((ρ0*(ddt(A) + grad(φ)) - Ek/Pm*lap(A) + lift(τ_A,-1),
+                        ρ0_g*cross(u, B)))
 # Boundary conditions
 problem.add_equation((radial(u(r=radius)), 0))
 problem.add_equation((radial(angular(e(r=radius))), 0))
-problem.add_equation((integ(p), 0))
 problem.add_equation((s(r=radius), 0))
 problem.add_equation((integ(φ), 0))
 problem.add_equation((dot(r_S2, grad(A)(r=radius))+ellp1(A)(r=radius)/radius, 0))
 logger.info("Problem built")
-
-logger.info("NCC expansions:")
-for ncc in [ρ2, T, ρT2, (T*grad_lnρ).evaluate(), (T*grad_lnT1).evaluate()]:
-    logger.info("{}: {}".format(ncc, np.where(np.abs(ncc['c']) >= ncc_cutoff)[0].shape))
 
 if args['--thermal_equilibrium']:
     logger.info("solving for thermal equilbrium")
@@ -408,6 +422,8 @@ u_fluc.store_last = True
 B_fluc = B - azavg(Br)*er - azavg(Bθ)*eθ - azavg(Bφ)*eφ
 B_fluc.store_last = True
 
+ρ = ρ0*np.exp(Υ)
+h = h0*np.exp(θ)
 KE = 0.5*ρ*dot(u,u)
 DRKE = 0.5*ρ*(azavg(uφ)**2)
 MCKE = 0.5*ρ*(azavg(ur)**2 + azavg(uθ)**2)
@@ -416,6 +432,9 @@ KE.store_last = True
 DRKE.store_last = True
 MCKE.store_last = True
 FKE.store_last = True
+
+Ma2_ad = 1/(γ-1)*dot(u,u)/h
+Ma2_ad.store_last = True
 
 ME = 0.5*dot(B,B)
 TME = 0.5*(azavg(Bφ)**2)
@@ -450,6 +469,7 @@ traces.add_task(avg(KE), name='KE')
 traces.add_task(avg(DRKE), name='DRKE')
 traces.add_task(avg(MCKE), name='MCKE')
 traces.add_task(avg(FKE), name='FKE')
+traces.add_task(avg(Ma2_ad), name='Ma2')
 traces.add_task(avg(ME), name='ME')
 traces.add_task(avg(TME), name='TME')
 traces.add_task(avg(PME), name='PME')
@@ -482,7 +502,7 @@ slices.add_task(shellavg(-Co2*Ek/Pr*T*dot(er, grad(s))), name='F_κ(r)')
 slices.add_task(shellavg(Co2*source), name='F_source(r)')
 slices.add_task(Br(r=radius), name='Br') # is this sufficient?  Should we be using radial(B) instead?
 
-report_cadence = 100
+report_cadence = 1
 flow = flow_tools.GlobalFlowProperty(solver, cadence=report_cadence)
 flow.add_property(Re2, name='Re2')
 flow.add_property(enstrophy, name='Ro2')
@@ -490,6 +510,7 @@ flow.add_property(Re2_fluc, name='Re2_fluc')
 flow.add_property(enstrophy_fluc, name='Ro2_fluc')
 flow.add_property(KE, name='KE')
 flow.add_property(ME, name='ME')
+flow.add_property(Ma2_ad, name='Ma2')
 flow.add_property(PE, name='PE')
 flow.add_property(Lz, name='Lz')
 flow.add_property(np.abs(τ_s), name='|τ_s|')
@@ -517,10 +538,11 @@ while solver.proceed and good_solution:
         PE_avg = flow.volume_integral('PE')/vol
         ME_avg = flow.volume_integral('ME')/vol
         Lz_avg = flow.volume_integral('Lz')/vol
+        Ma_avg = np.sqrt(flow.volume_integral('Ma2')/vol)
         max_τ = np.max([flow.max('|τ_u|'), flow.max('|τ_s|'), flow.max('|τ_p|')])
 
         log_string = "iter: {:d}, dt={:.1e}, t={:.3e} ({:.2e})".format(solver.iteration, dt, solver.sim_time, solver.sim_time*Ek)
-        log_string += ", KE={:.2e}, ME={:.2e}, PE={:.2e}".format(KE_avg, ME_avg, PE_avg)
+        log_string += ", Ma={:.2e}, KE={:.2e}, ME={:.2e}, PE={:.2e}".format(Ma_avg, KE_avg, ME_avg, PE_avg)
         log_string += ", Re={:.1e}/{:.1e}, Ro={:.1e}/{:.1e}".format(Re_avg, Re_fluc_avg, Ro_avg, Ro_fluc_avg)
         log_string += ", Lz={:.1e}, τ={:.1e}".format(Lz_avg, max_τ)
         logger.info(log_string)
@@ -529,46 +551,3 @@ while solver.proceed and good_solution:
 
 solver.log_stats()
 logger.debug("mode-stages/DOF = {}".format(solver.total_modes/(Nφ*Nθ*Nr)))
-
-if args['--plot_sparse']:
-    # Plot matrices
-    import matplotlib
-    import matplotlib.pyplot as plt
-
-    # Plot options
-    cmap = matplotlib.cm.get_cmap("winter_r")
-    clim = (-10, 0)
-    lim_margin = 0.05
-
-    def plot_sparse(A, ax, title):
-        I, J = A.shape
-        A_mag = np.log10(np.abs(A.A), where=(np.abs(A.A)>0))
-        ax.pcolor(A_mag[::-1], cmap=cmap, vmin=clim[0], vmax=clim[1])
-        ax.set_xlim(-lim_margin, I+lim_margin)
-        ax.set_ylim(-lim_margin, J+lim_margin)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_aspect('equal', 'box')
-        ax.text(0.95, 0.95, 'nnz: %i' %A.nnz, horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
-        ax.text(0.95, 0.95, '\ncon: %.1e' %np.linalg.cond(A.A), horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
-        ax.set_title(title)
-        return A.nnz, np.linalg.cond(A.A)
-
-    for sp in solver.subproblems:
-        fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(6,6))
-        m = sp.group[0]
-        l = sp.group[1]
-        print("sparsity structure for m={} ({})".format(m, sp.group))
-        # Plot LHS
-        LHS = (sp.M_min + sp.L_min) @ sp.pre_right
-        L = sp.LHS_solver.LU.L
-        U = sp.LHS_solver.LU.U
-        nnz_LHS, cond_LHS = plot_sparse(LHS, ax[0,0], 'LHS (m = %i)' %m)
-        nnz_LU, cond_LU = plot_sparse(L+U, ax[0,1], 'L+U (m = %i)' %m)
-        plot_sparse(L, ax[1,0], 'L (m = %i)' %m)
-        plot_sparse(U, ax[1,1], 'U (m = %i)' %m)
-        print("fill in {:.2g}".format(nnz_LU/nnz_LHS))
-
-        plt.tight_layout()
-        plt.savefig(data_dir+"/m_{:d}_l_{:d}.pdf".format(m,l))
-        plt.close(fig)
