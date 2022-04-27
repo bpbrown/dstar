@@ -4,7 +4,7 @@ using a Lane-Emden structure and internal heat source.
 Designed for modelling fully-convective stars.
 
 Usage:
-    mdwarf_hydro.py [options]
+    mdwarf_dynamo.py [options]
 
 Options:
     --Ekman=<Ekman>                      Ekman number    [default: 5e-5]
@@ -167,7 +167,7 @@ angular = lambda A: de.AngularComponent(A, index=1)
 trace = lambda A: de.Trace(A)
 power = lambda A, B: de.Power(A, B)
 lift_basis = b.clone_with(k=2)
-lift = lambda A, n: de.LiftTau(A,lift_basis,n)
+lift = lambda A, n: de.Lift(A,lift_basis,n)
 integ = lambda A: de.Integrate(A, c)
 azavg = lambda A: de.Average(A, c.coords[0])
 shellavg = lambda A: de.Average(A, c.S2coordsys)
@@ -212,19 +212,19 @@ lnT.name='lnT'
 grad_lnT = grad(lnT).evaluate()
 grad_lnT.name='grad_lnT'
 grad_lnT1 = d.VectorField(c,name='grad_lnT1', bases=bk2.radial_basis)
-grad_lnT.require_scales(1)
+grad_lnT.change_scales(1)
 grad_lnT1['g'] = grad_lnT['g']
 ρ = np.exp(lnρ).evaluate()
 ρ.name='ρ'
 ρ2 = d.Field(name='ρ2', bases=bk2.radial_basis)
-ρ.require_scales(1)
+ρ.change_scales(1)
 ρ2['g'] = ρ['g']
 grad_lnρ = grad(lnρ).evaluate()
 grad_lnρ.name='grad_lnρ'
 ρT = (ρ*T).evaluate()
 ρT.name='ρT'
 ρT2 = d.Field(name='ρT2', bases=bk2.radial_basis)
-ρT.require_scales(1)
+ρT.change_scales(1)
 ρT2['g'] = ρT['g']
 
 # Entropy source function, inspired from MESA model

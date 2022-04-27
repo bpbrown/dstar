@@ -21,7 +21,7 @@ def lane_emden(Nr, m=1.5, n_rho=3, radius=1,
     # Parameters and operators
     lap = lambda A: de.Laplacian(A, c)
     lift_basis = b.clone_with(k=2) # match laplacian
-    lift = lambda A: de.LiftTau(A, lift_basis, -1)
+    lift = lambda A: de.Lift(A, lift_basis, -1)
     problem = de.NLBVP([f, R, τ])
     problem.add_equation((lap(f) + lift(τ), - R**2 * f**m))
     problem.add_equation((f(r=0), 1))
@@ -49,7 +49,7 @@ def lane_emden(Nr, m=1.5, n_rho=3, radius=1,
 
     structure = {'T':T,'lnρ':lnρ}
     for key in structure:
-        structure[key].require_scales(1)
+        structure[key].change_scales(1)
     structure['r'] = r
     structure['problem'] = {'c':c, 'b':b, 'problem':problem}
     return structure
