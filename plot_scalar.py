@@ -100,7 +100,6 @@ fig_tau, ax_tau = plt.subplots(nrows=2)
 for i in range(2):
     ax_tau[i].plot(t, data['τ_u'], label=r'$\tau_{u}$')
     ax_tau[i].plot(t, data['τ_s'], label=r'$\tau_{s}$')
-    ax_tau[i].plot(t, data['τ_p'], label=r'$\tau_{p}$')
     if MHD:
         ax_tau[i].plot(t, data['τ_A'], label=r'$\tau_{A}$')
         ax_tau[i].plot(t, data['τ_φ'], label=r'$\tau_{\phi}$')
@@ -165,7 +164,7 @@ if MHD:
     benchmark_set = ['KE', 'ME', 'ME/KE', 'PE', 'Re', 'Ro', 'Lz', 'τ_u', 'τ_s', 'τ_A', 'τ_φ']
     data['ME/KE'] = data['ME']/data['KE']
 else:
-    benchmark_set = ['KE', 'PE', 'Re', 'Ro', 'Lz', 'τ_u', 'τ_s', 'τ_p']
+    benchmark_set = ['KE', 'PE', 'Re', 'Ro', 'Lz', 'τ_u', 'τ_s']
 
 i_ten = int(0.9*data[benchmark_set[0]].shape[0])
 print("benchmark values")

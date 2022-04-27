@@ -11,6 +11,7 @@
 \renewcommand{\vec}{\boldsymbol}
 \newcommand{\pomega}{\varpi}
 \newcommand{\conv}{\boldsymbol}
+\renewcommand{\div}{\vec{\del}\cdot}
 
 \newcommand{\scrB}{\mathcal{B}}
 \newcommand{\scrC}{\mathcal{C}}
@@ -216,10 +217,10 @@ The momentum equation is:
 
 The entropy equation is:
 \begin{equation}
-  \partial_t s + \vec{u}\cdot \del s =
-  \frac{K \tau}{c_P \rho_c L^2}\left(\frac{s_c}{c_P}\right) \frac{1}{\rho_0} \exp(-\Upsilon)\scrD^2(\theta)
-  + \frac{\mu}{2 \tau \rho_c h_c}\left(\frac{s_c}{c_P}\right) \frac{1}{\rho_0 h_0}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)
-  + \tau \left(\frac{s_c}{c_P}\right)\frac{\scrS}{c_P}
+  \left(\frac{s_c}{c_P}\right) \left[\partial_t s + \vec{u}\cdot \del s \right] =
+  \frac{K \tau}{c_P \rho_c L^2}\frac{1}{\rho_0} \exp(-\Upsilon)\scrD^2(\theta)
+  + \frac{(\mu/\rho_c)}{2 \tau h_c}\frac{1}{\rho_0 h_0}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)
+  + \tau \frac{\scrS}{c_P}
 \end{equation}
 with
 \begin{equation}
@@ -376,15 +377,15 @@ What do we do now?  Let's consider thermal and hydrostatic equilibrium for a mom
 \end{align}
 From the equation of state:
 \begin{equation}
-  \gamma \nabla^2 s_0 = \nabla^2 \ln h_0 - (\gamma-1)\nabla \ln \rho_0
+  \gamma \nabla^2 s_0 = \nabla^2 \ln h_0 - (\gamma-1)\nabla^2 \ln \rho_0
 \end{equation}
 or:
 \begin{align}
-\frac{\epsilon}{h_c} \frac{L^2}{K/(c_P \rho_c)}\frac{1}{h_0} +  \frac{1}{\rho_0} \left(\gamma \nabla^2 s_0 + (\gamma-1)\nabla \ln \rho_0 + (\nabla \ln h_0)^2 \right) = 0
+\frac{\epsilon}{h_c} \frac{L^2}{K/(c_P \rho_c)}\frac{1}{h_0} +  \frac{1}{\rho_0} \left(\gamma \nabla^2 s_0 + (\gamma-1)\nabla^2 \ln \rho_0 + (\nabla \ln h_0)^2 \right) = 0
 \end{align}
 and:
 \begin{align}
- \gamma \nabla^2 s_0 = - \rho_0 \frac{\epsilon}{h_c} \frac{L^2}{K/(c_P \rho_c)}\frac{1}{h_0} - (\gamma-1)\nabla \ln \rho_0 - (\nabla \ln h_0)^2
+ \gamma \nabla^2 s_0 = - \rho_0 \frac{\epsilon}{h_c} \frac{L^2}{K/(c_P \rho_c)}\frac{1}{h_0} - (\gamma-1)\nabla^2 \ln \rho_0 - (\nabla \ln h_0)^2
 \end{align}
 and taking:
 \begin{equation}
@@ -484,12 +485,79 @@ or, adopting the $\expm = \exp - 1$ operator:
 \end{align}
 
 
+\subsubsection{$\del s_0 = 0$, $s_c/c_P = \epsilon$, $\tau = L/a_h$}
+
+I think our $s_c/c_P = 1$ assumption is leading us astray.  There doesn't seem to be a reasonable way to tune the Mach number of the flows without affecting the Reynolds number (in experiments), but I may be missing something.  Let's try a different tack.
+
+Let's take $s_c/c_P = \epsilon$ and let's take $\tau$ to be the acoustic crossing time $\tau = L/a_h$, like in previous d2 work, with $a_h^2 = c_P T_c$.
+
+The momentum equation is:
+\begin{equation}
+  \partial_t \vec{u} + \vec{u}\cdot \del \vec{u} + \del (h_0[\exp(\theta)-1]) =
+  \epsilon h_0\exp(\theta)\del s + \scrR \frac{1}{\rho_0}\exp(-\Upsilon)\del\cdot (E_{ij}) - \frac{2 \Omega L}{a_h} \vec{\hat{z}} \times \vec{u},
+\end{equation}
+
+The entropy equation is:
+\begin{equation}
+  \epsilon \left[\partial_t s + \vec{u}\cdot \del s \right] =
+  \frac{\scrR}{\mathrm{Pr}}\frac{1}{\rho_0} \exp(-\Upsilon)\scrD^2(\theta)
+  + \scrR \frac{1}{2}\frac{1}{\rho_0 h_0}\exp(-\Upsilon) \exp(-\theta)\mathrm{Tr}(E^2)
+  + \frac{L}{a_h} \frac{\scrS}{c_P}
+\end{equation}
+with
+\begin{equation}
+\frac{\scrS}{c_P} = \frac{K/(c_P \rho_c)}{L^2} \left[\frac{\epsilon}{h_c} \frac{L^2}{K/(c_P \rho_c)}\frac{1}{h_0}\exp(-\theta) +  \frac{1}{\rho_0} \exp(-\Upsilon) \nabla^2 \ln h_0 + (\nabla \ln h_0)^2 \right]
+\end{equation}
+and
+\begin{equation}
+\scrD^2(\theta) = \nabla^2 \theta + 2\left(\nabla \ln h_0 \cdot \nabla \theta \right) + \left(\nabla \theta \right)^2
+\end{equation}
+\begin{equation}
+  \epsilon \gamma s = \theta - (\gamma-1)\Upsilon
+\end{equation}
+
+\begin{align}
+  \scrR &= \frac{\mu/\rho_c}{L a_h}\\
+  \frac{\scrR}{\mathrm{Pr}} &= \frac{K/(c_P \rho_c)}{L a_h} \\
+  \frac{(\mu/\rho_c)}{\tau h_c} &= \frac{(\mu/\rho_c)}{L a_h} \frac{a_h^2}{h_c} = \scrR
+\end{align}
+
+\subsection{Polytropes with internal heating}
+What do things look like for an adiabatic polytrope that has internal heating?
+
+First, let's assume constant internal heating.  Then, we have:
+\begin{equation}
+\frac{\div \vec{F}}{\rho T} = \frac{\mathrm{d}q}{T}
+\end{equation}
+If I want the heating to create a linearly varying flux with height, like in Whitney's work:
+\begin{equation}
+  \mathrm{d}q = \div \vec{F} = \div (F_0 (z/L) \vec{\hat{z}}) = \epsilon = F_0/L
+\end{equation}
+and we have:
+\begin{equation}
+\frac{L}{a_h}\frac{\scrS}{c_P} =
+\frac{L}{a_h} \frac{\div \vec{F}}{\rho T} =
+\frac{F_0}{L}\frac{L}{a_h}\frac{1}{\rho_c h_c}\frac{1}{\rho h} =
+\frac{K/(c_P \rho_c)}{L a_h} \epsilon \frac{1}{\rho h} =
+\frac{\scrR}{\mathrm{Pr}}\epsilon \frac{1}{\rho h}
+\end{equation}
+where I've taken our typical approach of scaling $F_0$ with $K$ so that we get the same entropy jump at different $\scrR$.
+\begin{equation}
+F_0 = \epsilon \frac{K}{\rho_c}\frac{T_c}{L} =
+\epsilon \frac{K}{c_P \rho_c}\frac{h_c}{L} =
+\epsilon\frac{[K/(c_P \rho_c)] h_c}{L}
+\end{equation}
+(we're $\epsilon$ of the background thermal reservoir, and $\del T_c = T_c/L$)
+\label{sec:flux and epsilon}
+
 \section{Being smarter}
 I think we could do better by considering:
 \begin{equation}
   \epsilon = \del \cdot \vec{q}
 \end{equation}
 and considering the flux associated with the heating.  But that's for later.
+
+(actually, it's for now; see sec~\ref{sec:flux and epsilon})
 
 \end{document}
 

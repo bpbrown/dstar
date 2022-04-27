@@ -242,7 +242,8 @@ def source_function(r):
     σ = 0.11510794072958948
     Q0_over_Q1 = 10.969517734412433
     # normalization from Brown et al 2020
-    Q1 = σ**-2/(Q0_over_Q1 + 1) # normalize to σ**-2 at r=0
+    #Q1 = σ**-2/(Q0_over_Q1 + 1) # normalize to σ**-2 at r=0
+    Q1 = 1/(Q0_over_Q1 + 1) # normalize to 1 at r=0
     logger.info("Source function: Q0/Q1 = {:.3g}, σ = {:.3g}, Q1 = {:.3g}".format(Q0_over_Q1, σ, Q1))
     return (Q0_over_Q1*np.exp(-r**2/(2*σ**2)) + 1)*Q1
 
@@ -275,7 +276,6 @@ Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 logger.info("NCC expansions:")
 for ncc in [ρ0, ρ0*grad(h0), ρ0*h0, ρ0*grad(θ0), h0*grad(Υ0)]:
     logger.info("{}: {}".format(ncc.evaluate(), np.where(np.abs(ncc.evaluate()['c']) >= ncc_cutoff)[0].shape))
-
 
 #Problem
 problem = de.IVP([u, Υ, θ, s, φ, A, τ_u, τ_s, τ_φ, τ_A])
@@ -425,6 +425,8 @@ B_fluc.store_last = True
 
 ρ = ρ0*np.exp(Υ)
 h = h0*np.exp(θ)
+c_P = γ/(γ-1)
+T = h/c_P
 KE = 0.5*ρ*dot(u,u)
 DRKE = 0.5*ρ*(azavg(uφ)**2)
 MCKE = 0.5*ρ*(azavg(ur)**2 + azavg(uθ)**2)
