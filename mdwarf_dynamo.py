@@ -153,7 +153,6 @@ A = d.VectorField(c, name="A", bases=b)
 τ_A = d.VectorField(c, name="τ_A", bases=b_S2)
 
 # Parameters and operators
-# Parameters and operators
 div = lambda A: de.Divergence(A, index=0)
 lap = lambda A: de.Laplacian(A, c)
 grad = lambda A: de.Gradient(A, c)
@@ -196,10 +195,11 @@ r_S2['g'][2] = 1
 
 structure = lane_emden(Nr, n_rho=n_rho, m=1.5, comm=MPI.COMM_SELF)
 
-bk2 = b.clone_with(k=2)
-bk1 = b.clone_with(k=1)
-T = d.Field(name='T', bases=b.radial_basis)
-lnρ = d.Field(name='lnρ', bases=b.radial_basis)
+b_ncc = de.BallBasis(c, shape=(1,1,Nr), radius=radius, dealias=dealias, dtype=np.float64)
+bk2 = b_ncc.clone_with(k=2)
+bk1 = b_ncc.clone_with(k=1)
+T = d.Field(name='T', bases=b_ncc)
+lnρ = d.Field(name='lnρ', bases=b_ncc)
 
 if T['g'].size > 0 :
     # TO-DO: clean this up and make work for lane-emden solve in np.float64 rather than np.complex128
@@ -211,19 +211,19 @@ lnT = np.log(T).evaluate()
 lnT.name='lnT'
 grad_lnT = grad(lnT).evaluate()
 grad_lnT.name='grad_lnT'
-grad_lnT1 = d.VectorField(c,name='grad_lnT1', bases=bk2.radial_basis)
+grad_lnT1 = d.VectorField(c,name='grad_lnT1', bases=bk2)
 grad_lnT.change_scales(1)
 grad_lnT1['g'] = grad_lnT['g']
 ρ = np.exp(lnρ).evaluate()
 ρ.name='ρ'
-ρ2 = d.Field(name='ρ2', bases=bk2.radial_basis)
+ρ2 = d.Field(name='ρ2', bases=bk2)
 ρ.change_scales(1)
 ρ2['g'] = ρ['g']
 grad_lnρ = grad(lnρ).evaluate()
 grad_lnρ.name='grad_lnρ'
 ρT = (ρ*T).evaluate()
 ρT.name='ρT'
-ρT2 = d.Field(name='ρT2', bases=bk2.radial_basis)
+ρT2 = d.Field(name='ρT2', bases=bk2)
 ρT.change_scales(1)
 ρT2['g'] = ρT['g']
 
