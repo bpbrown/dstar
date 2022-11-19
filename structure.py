@@ -219,8 +219,8 @@ def plot_model_star(Nr, structure, γ=5/3, dtype=np.float64, ncc_cutoff=1e-10):
 
     integ = lambda A: de.Integrate(A, c)
 
-    T = d.Field(name='T', bases=b.radial_basis)
-    lnρ = d.Field(name='lnρ', bases=b.radial_basis)
+    T = d.Field(name='T', bases=b)
+    lnρ = d.Field(name='lnρ', bases=b)
 
     if T['g'].size > 0 :
         for i, r_i in enumerate(r[0,0,:]):
