@@ -273,7 +273,7 @@ problem.add_equation((radial(angular(e(r=radius))), 0))
 problem.add_equation((integ(p), 0))
 problem.add_equation((s(r=radius), 0))
 problem.add_equation((integ(φ), 0))
-problem.add_equation((dot(r_S2, grad(A)(r=radius))+ellp1(A)(r=radius)/radius, 0))
+problem.add_equation((radial(grad(A)(r=radius)) + ellp1(A)(r=radius)/radius, 0))
 logger.info("Problem built")
 
 logger.info("NCC expansions:")
@@ -428,7 +428,7 @@ Re2_fluc = dot(u_fluc,u_fluc)*(ρ/Ek)**2
 Re2_fluc.store_last=True
 
 scalar_dt = float(args['--scalar_dt'])
-traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=scalar_dt, max_writes=np.inf)
+traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=scalar_dt, max_writes=None)
 traces.add_task(avg(KE), name='KE')
 traces.add_task(avg(DRKE), name='DRKE')
 traces.add_task(avg(MCKE), name='MCKE')
@@ -451,7 +451,7 @@ traces.add_task(shellavg(np.sqrt(dot(τ_u,τ_u))), name='τ_u')
 traces.add_task(shellavg(np.sqrt(dot(τ_A,τ_A))), name='τ_A')
 
 slice_dt = float(args['--slice_dt'])
-slices = solver.evaluator.add_file_handler(data_dir+'/slices', sim_dt = slice_dt, max_writes = 10, virtual_file=True, mode=mode)
+slices = solver.evaluator.add_file_handler(data_dir+'/slices', sim_dt = slice_dt, max_writes = 10, mode=mode)
 slices.add_task(s(theta=np.pi/2), name='s')
 slices.add_task(enstrophy(theta=np.pi/2), name='enstrophy')
 slices.add_task(azavg(Ωz), name='<Ωz>')
