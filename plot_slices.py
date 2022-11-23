@@ -34,7 +34,7 @@ def equator_plot(r, phi, data, time=None, index=None, pcm=None, cmap=None, title
     else:
         cNorm = matplotlib.colors.Normalize(vmin=pmin, vmax=pmax)
 
-    pcm = ax.pcolormesh(phi_plot,r_plot,padded_data[:,:], cmap=cmap, vmin=pmin, vmax=pmax, norm=cNorm)
+    pcm = ax.pcolormesh(phi_plot,r_plot,padded_data[:,:], cmap=cmap, norm=cNorm)
     ax.set_rticks([])
     ax.set_aspect(1)
 

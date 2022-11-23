@@ -54,7 +54,7 @@ if MHD:
 else:
     energy_keys = ['KE', 'PE']
 
-fig_E, ax_E = plt.subplots(nrows=2)
+fig_E, ax_E = plt.subplots(nrows=2, sharex=True)
 for key in energy_keys:
     ax_E[0].plot(t, data[key], label=key)
 for key in energy_keys[:-1]:
@@ -71,7 +71,7 @@ for ax in ax_E:
     ax.set_yscale('log')
 fig_E.savefig('{:s}/log_energies.pdf'.format(str(output_path)))
 
-fig_tau, ax_tau = plt.subplots(nrows=2)
+fig_tau, ax_tau = plt.subplots(nrows=2, sharex=True)
 for i in range(2):
     ax_tau[i].plot(t, data['τ_u'], label=r'$\tau_{u}$')
     ax_tau[i].plot(t, data['τ_s'], label=r'$\tau_{s}$')
@@ -91,7 +91,7 @@ ylims = ax_tau[1].get_ylim()
 ax_tau[1].set_ylim(max(1e-14, ylims[0]), ylims[1])
 fig_tau.savefig('{:s}/tau_error.pdf'.format(str(output_path)))
 
-fig_L, ax_L = plt.subplots(nrows=2)
+fig_L, ax_L = plt.subplots(nrows=2, sharex=True)
 ax_L[0].plot(t, data['Lz'], label='Lz')
 ax_L[1].plot(t, np.abs(data['Lz']), label='Lz')
 
@@ -104,7 +104,7 @@ for ax in ax_L:
 ax_L[1].set_yscale('log')
 fig_L.savefig('{:s}/angular_momentum.pdf'.format(str(output_path)))
 
-fig_f, ax_f = plt.subplots(nrows=2)
+fig_f, ax_f = plt.subplots(nrows=2, sharex=True)
 for ax in ax_f:
     ax.plot(t, data['Re'], label='Re')
     ax_r = ax.twinx()
@@ -127,10 +127,7 @@ else:
     benchmark_set = ['KE', 'PE', 'Re', 'Ro', 'Lz', 'τ_u', 'τ_s', 'τ_p']
 
 i_ten = int(0.9*data[benchmark_set[0]].shape[0])
+print("total simulation time {:6.2g}".format(t[-1]-t[0]))
 print("benchmark values")
 for benchmark in benchmark_set:
     print("{:s} = {:14.12g} +- {:4.2g} (averaged from {:g}-{:g})".format(benchmark, np.mean(data[benchmark][i_ten:]), np.std(data[benchmark][i_ten:]), t[i_ten], t[-1]))
-print()
-for benchmark in benchmark_set:
-    print("{:s} = {:14.12g} (at t={:g})".format(benchmark, data[benchmark][-1], t[-1]))
-print("total simulation time {:6.2g}".format(t[-1]-t[0]))

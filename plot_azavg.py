@@ -7,8 +7,8 @@ Usage:
 
 Options:
      <files>...         List of files to compute azavg over.
-     --field=<field>    Data to timeaverage and plot [default: <Bφ>]
-     --filename=<file>  Filename for output [default: omega.png]
+     --field=<field>    Data to timeaverage and plot [default: <Ωz>]
+     --filename=<file>  Filename for output [default: omega]
      --title=<title>    Title for plot [default: $<\Omega>$]
      --cmap=<cmap>      Colormap for plot [default: plasma]
 
@@ -50,7 +50,7 @@ def cylinder_plot(r, theta, data, min=None, max=None, cmap=None, title=None, cen
         logger.info("centering zero: {} -- 0 -- {}".format(pmin, pmax))
     else:
         cNorm = matplotlib.colors.Normalize(vmin=pmin, vmax=pmax)
-    pcm = ax.pcolormesh(theta_plot,r_plot,padded_data, cmap=cmap, vmin=pmin, vmax=pmax, norm=cNorm)
+    pcm = ax.pcolormesh(theta_plot,r_plot,padded_data, cmap=cmap,  norm=cNorm)
     logger.info("image min {:.4g}, max {:.4g}".format(pmin, pmax))
 
     ax_cb = fig.add_axes([0.8, 0.3, 0.03, 1-0.3*2])
@@ -216,4 +216,4 @@ if __name__ == "__main__":
         image_max = min(np.max(data_avg), avg+3*std_dev)
         print(r.shape, theta.shape, data_avg.shape)
         fig_data, pcm = cylinder_plot(r, theta, data_avg, cmap=cmap, title='{:s}'.format(title), min=image_min, max=image_max, center_zero=center_zero)
-        fig_data.savefig('{:s}/{:s}'.format(str(output_path), filename))
+        fig_data.savefig('{:s}/{:s}.png'.format(str(output_path), filename), dpi=300)

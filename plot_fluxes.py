@@ -125,7 +125,7 @@ if args['--MESA']:
     ax_hr.plot(r_mesa, L_MLT, color='darkslateblue', linestyle='dashed', label='MESA MLT')
     ax_hr.plot(r_mesa, L_S_mesa, color='firebrick', linestyle='dashed', label='MESA S')
 ax_hr.legend()
-ax_hr.set_ylabel(r'$L/L_{\scrS(r=1)}$')
+ax_hr.set_ylabel(r'$L/L_{\mathcal{S}(r=1)}$')
 ax_hr.set_xlabel(r'$r/R$')
 fig_hr.savefig('{:s}/flux_balance.pdf'.format(str(output_path)))
 
