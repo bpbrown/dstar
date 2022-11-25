@@ -30,7 +30,7 @@ Options:
     --run_time_sim=<run_time>            How long to run, in rotating time units
     --run_time_iter=<niter>              How long to run, in iterations
 
-    --slice_dt=<slice_dt>                Cadence at which to output slices, in rotation times (P_rot = 4pi) [default: 10]
+    --slice_dt=<slice_dt>                Cadence at which to output slices, in rotation times (P_rot = 4pi).  If not specified, a sensible guess based on sqrt(Co2) will be made.
     --scalar_dt=<scalar_dt>              Time between scalar outputs, in rotation times (P_rot = 4pi) [default: 2]
 
     --restart=<restart>                  Merged chechpoint file to restart from.
@@ -453,7 +453,11 @@ traces.add_task(shellavg(np.abs(τ_s)), name='τ_s')
 traces.add_task(shellavg(np.sqrt(dot(τ_u,τ_u))), name='τ_u')
 traces.add_task(shellavg(np.sqrt(dot(τ_A,τ_A))), name='τ_A')
 
-slice_dt = float(args['--slice_dt'])
+if args['--slice_dt']:
+    slice_dt = float(args['--slice_dt'])
+else:
+    slice_dt = 10/np.sqrt(Co2)
+
 slices = solver.evaluator.add_file_handler(data_dir+'/slices', sim_dt = slice_dt, max_writes = 10, mode=mode)
 slices.add_task(s(theta=np.pi/2), name='s')
 slices.add_task(enstrophy(theta=np.pi/2), name='enstrophy')
