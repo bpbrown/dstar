@@ -92,17 +92,22 @@ ax_tau[1].set_ylim(max(1e-14, ylims[0]), ylims[1])
 fig_tau.savefig('{:s}/tau_error.pdf'.format(str(output_path)))
 
 fig_L, ax_L = plt.subplots(nrows=2, sharex=True)
+ax_L[0].plot(t, data['Lx'], label='Lx')
+ax_L[0].plot(t, data['Ly'], label='Ly')
 ax_L[0].plot(t, data['Lz'], label='Lz')
+ax_L[1].plot(t, np.abs(data['Lx']), label='Lx')
+ax_L[1].plot(t, np.abs(data['Ly']), label='Ly')
 ax_L[1].plot(t, np.abs(data['Lz']), label='Lz')
 
 for ax in ax_L:
     if subrange:
         ax.set_xlim(t_min,t_max)
-    ax.set_xlabel('time')
     ax.set_ylabel('Angular Momentum')
     ax.legend(loc='lower left')
+ax_L[1].set_xlabel('time')
 ax_L[1].set_yscale('log')
 fig_L.savefig('{:s}/angular_momentum.pdf'.format(str(output_path)))
+fig_L.savefig('{:s}/angular_momentum.png'.format(str(output_path)), dpi=300)
 
 fig_f, ax_f = plt.subplots(nrows=2, sharex=True)
 for ax in ax_f:

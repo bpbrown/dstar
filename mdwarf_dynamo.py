@@ -169,6 +169,14 @@ ell_func = lambda ell: ell+1
 ellp1 = lambda A: de.SphericalEllProduct(A, c, ell_func)
 
 # NCCs and variables of the problem
+ex = d.VectorField(c, bases=b, name='ex')
+ex['g'][2] = np.sin(theta)*np.cos(phi)
+ex['g'][1] = np.cos(theta)*np.cos(phi)
+ex['g'][0] = -np.sin(phi)
+ey = d.VectorField(c, bases=b, name='ey')
+ey['g'][2] = np.sin(theta)*np.sin(phi)
+ey['g'][1] = np.cos(theta)*np.sin(phi)
+ey['g'][0] = np.cos(phi)
 ez = d.VectorField(c, name='ez', bases=b)
 ez['g'][1] = -np.sin(theta)
 ez['g'][2] =  np.cos(theta)
@@ -406,9 +414,9 @@ PE = Co2*ρ*T*s
 PE.name = 'PE'
 PE.store_last = True
 
-Lz = dot(cross(r_vec,ρ*u), ez)
-Lz.name='Lz'
-Lz.store_last = True
+L = cross(r_vec,ρ*u)
+L.name='L'
+
 
 enstrophy = dot(curl(u),curl(u))
 enstrophy.store_last = True
@@ -436,7 +444,9 @@ traces.add_task(np.sqrt(avg(Re2)), name='Re')
 traces.add_task(np.sqrt(avg(enstrophy_fluc)), name='Ro_fluc')
 traces.add_task(np.sqrt(avg(Re2_fluc)), name='Re_fluc')
 traces.add_task(avg(PE), name='PE')
-traces.add_task(avg(Lz), name='Lz')
+traces.add_task(integ(dot(L,ex)), name='Lx')
+traces.add_task(integ(dot(L,ey)), name='Ly')
+traces.add_task(integ(dot(L,ez)), name='Lz')
 traces.add_task(np.abs(τ_p), name='τ_p')
 traces.add_task(np.abs(τ_φ), name='τ_φ')
 traces.add_task(shellavg(np.abs(τ_s)), name='τ_s')
@@ -467,7 +477,7 @@ flow.add_property(enstrophy_fluc, name='Ro2_fluc')
 flow.add_property(KE, name='KE')
 flow.add_property(ME, name='ME')
 flow.add_property(PE, name='PE')
-flow.add_property(Lz, name='Lz')
+flow.add_property(dot(L,ez), name='Lz')
 flow.add_property(np.abs(τ_s), name='|τ_s|')
 flow.add_property(np.abs(τ_p), name='|τ_p|')
 flow.add_property(np.sqrt(dot(τ_u,τ_u)), name='|τ_u|')
