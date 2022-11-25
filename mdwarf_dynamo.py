@@ -117,10 +117,6 @@ logger.info("saving data in {}".format(data_dir))
 logger.info("Run parameters")
 logger.info("Ek = {}, Co2 = {}, Pr = {}, Pm = {}".format(Ek,Co2,Pr, Pm))
 
-from structure import lane_emden
-
-
-
 dealias = float(args['--dealias'])
 
 c = de.SphericalCoordinates('phi', 'theta', 'r')
@@ -196,6 +192,7 @@ r_vec_g = de.Grid(r_vec).evaluate()
 r_S2 = d.VectorField(c, name='r_S2')
 r_S2['g'][2] = 1
 
+from structure import lane_emden
 structure = lane_emden(Nr, n_rho=n_rho, m=1.5, comm=MPI.COMM_SELF)
 
 T = d.Field(name='T', bases=b_ncc)
@@ -317,48 +314,22 @@ else:
     s['g'] += amp*noise['g']
 
 mag_amp = 1e-4
-invert_B_to_A = False
-if invert_B_to_A:
-    B_IC = d.VectorField(c, name="B_IC", bases=b)
-    B_IC['g'][2] = 0 # radial
-    B_IC['g'][1] = -mag_amp*3./2.*r*(-1+4*r**2-6*r**4+3*r**6)*(np.cos(phi)+np.sin(phi))
-    B_IC['g'][0] = -mag_amp*3./4.*r*(-1+r**2)*np.cos(theta)* \
-                                 ( 3*r*(2-5*r**2+4*r**4)*np.sin(theta)
-                                 +2*(1-3*r**2+3*r**4)*(np.cos(phi)-np.sin(phi)))
-    logger.info("set initial conditions for B")
-    IC_problem = de.LBVP([φ, A, τ_φ, τ_A])
-    IC_problem.add_equation((div(A) + τ_φ, 0))
-    IC_problem.add_equation((curl(A) + grad(φ) + lift(τ_A, -1), B_IC))
-    IC_problem.add_equation((integ(φ), 0))
-    IC_problem.add_equation((dot(r_S2, grad(A)(r=radius))+ellp1(A)(r=radius)/radius, 0))
-    IC_solver = IC_problem.build_solver()
-    IC_solver.solve()
-    logger.info("solved for initial conditions for A")
-else:
-    # Marti convective dynamo benchmark values
-    A_analytic_2 = (3/2*r**2*(1-4*r**2+6*r**4-3*r**6)
-                       *np.sin(theta)*(np.sin(phi)-np.cos(phi))
-                   +3/8*r**3*(2-7*r**2+9*r**4-4*r**6)
-                       *(3*np.cos(theta)**2-1)
-                   +9/160*r**2*(-200/21*r+980/27*r**3-540/11*r**5+880/39*r**7)
-                         *(3*np.cos(theta)**2-1)
-                   +9/80*r*(1-100/21*r**2+245/27*r**4-90/11*r**6+110/39*r**8)
-                        *(3*np.cos(theta)**2-1)
-                   +1/8*r*(-48/5*r+288/7*r**3-64*r**5+360/11*r**7)
-                       *np.sin(theta)*(np.sin(phi)-np.cos(phi))
-                   +1/8*(1-24/5*r**2+72/7*r**4-32/3*r**6+45/11*r**8)
-                       *np.sin(theta)*(np.sin(phi)-np.cos(phi)))
-    A_analytic_1 = (-27/80*r*(1-100/21*r**2+245/27*r**4-90/11*r**6+110/39*r**8)
-                            *np.cos(theta)*np.sin(theta)
-                    +1/8*(1-24/5*r**2+72/7*r**4-32/3*r**6+45/11*r**8)
-                        *np.cos(theta)*(np.sin(phi)-np.cos(phi)))
-    A_analytic_0 = (1/8*(1-24/5*r**2+72/7*r**4-32/3*r**6+45/11*r**8)
-                       *(np.cos(phi)+np.sin(phi)))
+B_IC = d.VectorField(c, name="B_IC", bases=b)
+B_IC['g'][2] = 0 # radial
+B_IC['g'][1] = -mag_amp*3./2.*r*(-1+4*r**2-6*r**4+3*r**6)*(np.cos(phi)+np.sin(phi))
+B_IC['g'][0] = -mag_amp*3./4.*r*(-1+r**2)*np.cos(theta)*( 3*r*(2-5*r**2+4*r**4)*np.sin(theta) + 2*(1-3*r**2+3*r**4)*(np.cos(phi)-np.sin(phi)))
+J_IC = curl(B_IC)
 
-    A['g'][0] = mag_amp*A_analytic_0
-    A['g'][1] = mag_amp*A_analytic_1
-    A['g'][2] = mag_amp*A_analytic_2
+IC_problem = de.LBVP([φ, A, τ_φ, τ_A])
+IC_problem.add_equation((div(A) + τ_φ, 0))
+IC_problem.add_equation((-lap(A) + grad(φ) + lift(τ_A, -1), J_IC))
+IC_problem.add_equation((integ(φ), 0))
+IC_problem.add_equation((radial(grad(A)(r=radius)) + ellp1(A)(r=radius)/radius, 0))
+IC_solver.solve()
+logger.info("solved for initial conditions for A")
 
+L2_error = lambda A, B: de.integ(de.dot(A-B,A-B)).evaluate()['g'][0,0,0]
+logger.debug('L2 error between curl(A) and B_IC: {:.3g}'.format(L2_error(B_IC-curl(A))))
 
 max_dt = float(args['--max_dt'])
 dt = max_dt/10
