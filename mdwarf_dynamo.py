@@ -31,7 +31,7 @@ Options:
     --run_time_iter=<niter>              How long to run, in iterations
 
     --slice_dt=<slice_dt>                Cadence at which to output slices, in rotation times (P_rot = 4pi).  If not specified, a sensible guess based on sqrt(Co2) will be made.
-    --scalar_dt=<scalar_dt>              Time between scalar outputs, in rotation times (P_rot = 4pi) [default: 2]
+    --scalar_dt=<scalar_dt>              Time between scalar outputs, in rotation times (P_rot = 4pi)
 
     --restart=<restart>                  Merged chechpoint file to restart from.
                                          Make sure "--label" is set to avoid overwriting the previous run.
@@ -428,8 +428,17 @@ Re2.store_last=True
 Re2_fluc = dot(u_fluc,u_fluc)*(ρ/Ek)**2
 Re2_fluc.store_last=True
 
-scalar_dt = float(args['--scalar_dt'])
-traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=scalar_dt, max_writes=None)
+if args['--slice_dt']:
+    slice_dt = float(args['--slice_dt'])
+else:
+    slice_dt = 10/np.sqrt(Co2)
+
+if args['--scalar_dt']:
+    scalar_dt = float(args['--scalar_dt'])
+else:
+    scalar_dt = 1/np.sqrt(Co2)
+
+traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=scalar_dt, max_writes=None, mode=mode)
 traces.add_task(avg(KE), name='KE')
 traces.add_task(avg(DRKE), name='DRKE')
 traces.add_task(avg(MCKE), name='MCKE')
@@ -438,7 +447,6 @@ traces.add_task(avg(ME), name='ME')
 traces.add_task(avg(TME), name='TME')
 traces.add_task(avg(PME), name='PME')
 traces.add_task(avg(FME), name='FME')
-traces.add_task(integ(KE)/Ek**2, name='E0')
 traces.add_task(np.sqrt(avg(enstrophy)), name='Ro')
 traces.add_task(np.sqrt(avg(Re2)), name='Re')
 traces.add_task(np.sqrt(avg(enstrophy_fluc)), name='Ro_fluc')
@@ -452,11 +460,6 @@ traces.add_task(np.abs(τ_φ), name='τ_φ')
 traces.add_task(shellavg(np.abs(τ_s)), name='τ_s')
 traces.add_task(shellavg(np.sqrt(dot(τ_u,τ_u))), name='τ_u')
 traces.add_task(shellavg(np.sqrt(dot(τ_A,τ_A))), name='τ_A')
-
-if args['--slice_dt']:
-    slice_dt = float(args['--slice_dt'])
-else:
-    slice_dt = 10/np.sqrt(Co2)
 
 slices = solver.evaluator.add_file_handler(data_dir+'/slices', sim_dt = slice_dt, max_writes = 10, mode=mode)
 slices.add_task(s(theta=np.pi/2), name='s')
