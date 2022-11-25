@@ -248,13 +248,11 @@ J = -lap(A) #curl(B)
 
 #e = 0.5*(grad(u) + trans(grad(u)))
 e = grad(u) + trans(grad(u))
-e.store_last = True
 
 ω = curl(u)
 #viscous_terms = div(e) + dot(grad_lnρ, e) - 2/3*grad(div(u)) - 2/3*grad_lnρ*div(u)
 viscous_terms = div(e) - 2/3*grad(div(u))
 trace_e = trace(e)
-trace_e.store_last = True
 Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
 #Problem
@@ -387,46 +385,30 @@ Aφ = dot(A, eφ)
 Ωz = uφ/ρ_cyl # this is not ω_z; misses gradient terms; this is angular differential rotation.
 
 u_fluc = u - azavg(ur)*er - azavg(uθ)*eθ - azavg(uφ)*eφ
-u_fluc.store_last = True
-
 B_fluc = B - azavg(Br)*er - azavg(Bθ)*eθ - azavg(Bφ)*eφ
-B_fluc.store_last = True
 
 KE = 0.5*ρ*dot(u,u)
 DRKE = 0.5*ρ*(azavg(uφ)**2)
 MCKE = 0.5*ρ*(azavg(ur)**2 + azavg(uθ)**2)
 FKE = KE - DRKE - MCKE #0.5*dot(u_fluc, u_fluc)
-KE.store_last = True
-DRKE.store_last = True
-MCKE.store_last = True
-FKE.store_last = True
 
 ME = 0.5*dot(B,B)
 TME = 0.5*(azavg(Bφ)**2)
 PME = 0.5*(azavg(Br)**2 + azavg(Bθ)**2)
 FME = ME - TME - PME #0.5*dot(B_fluc, B_fluc)
-ME.store_last = True
-TME.store_last = True
-PME.store_last = True
-FME.store_last = True
 
 PE = Co2*ρ*T*s
 PE.name = 'PE'
-PE.store_last = True
 
 L = cross(r_vec,ρ*u)
 L.name='L'
 
 
 enstrophy = dot(curl(u),curl(u))
-enstrophy.store_last = True
 enstrophy_fluc = dot(curl(u_fluc),curl(u_fluc))
-enstrophy_fluc.store_last = True
 
 Re2 = dot(u,u)*(ρ/Ek)**2
-Re2.store_last=True
 Re2_fluc = dot(u_fluc,u_fluc)*(ρ/Ek)**2
-Re2_fluc.store_last=True
 
 if args['--slice_dt']:
     slice_dt = float(args['--slice_dt'])
@@ -437,6 +419,8 @@ if args['--scalar_dt']:
     scalar_dt = float(args['--scalar_dt'])
 else:
     scalar_dt = 1/np.sqrt(Co2)
+
+logger.debug('output cadences: slices = {:}, scalar_dt = {:}'.format(slice_dt, scalar_dt))
 
 traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=scalar_dt, max_writes=None, mode=mode)
 traces.add_task(avg(KE), name='KE')
