@@ -41,11 +41,13 @@ Options:
     --ncc_cutoff=<ncc_cutoff>            Amplitude to truncate NCC terms [default: 1e-10]
     --plot_sparse                        Plot sparsity structures for L+M and it's LU decomposition
 """
-import numpy as np
-from dedalus.tools.parallel import Sync
+import logging
+logger = logging.getLogger(__name__)
+for system in ['matplotlib', 'h5py', 'evaluator', 'transposes', 'transforms']:
+    dlog = logging.getLogger(system)
+    dlog.setLevel(logging.WARNING)
 
-import pathlib
-import os
+import numpy as np
 import sys
 import h5py
 
@@ -57,13 +59,6 @@ ncpu = comm.size
 
 from docopt import docopt
 args = docopt(__doc__)
-
-import logging
-logger = logging.getLogger(__name__)
-dlog = logging.getLogger('matplotlib')
-dlog.setLevel(logging.WARNING)
-dlog = logging.getLogger('evaluator')
-dlog.setLevel(logging.WARNING)
 
 data_dir = sys.argv[0].split('.py')[0]
 data_dir += '_Co{}_Ek{}_Pr{}_Pm{}'.format(args['--ConvectiveRossbySq'],args['--Ekman'],args['--Prandtl'],args['--MagneticPrandtl'])
@@ -132,13 +127,20 @@ c = de.SphericalCoordinates('phi', 'theta', 'r')
 d = de.Distributor(c, mesh=mesh, dtype=np.float64)
 b = de.BallBasis(c, shape=(Nφ,Nθ,Nr), radius=radius, dealias=dealias, dtype=np.float64)
 b_S2 = b.S2_basis()
+bk2 = b.clone_with(k=2)
+bk1 = b.clone_with(k=1)
+
+b_ncc = de.BallBasis(c, shape=(1,1,Nr), radius=radius, dealias=dealias, dtype=np.float64)
+b_ncc_k2 = b_ncc.clone_with(k=2)
+b_ncc_k1 = b_ncc.clone_with(k=1)
+
 phi, theta, r = b.local_grids()
 
-p = d.Field(name='p', bases=b)
+p = d.Field(name='p', bases=bk1)
 s = d.Field(name='s', bases=b)
 u = d.VectorField(c, name='u', bases=b)
 A = d.VectorField(c, name="A", bases=b)
-φ = d.Field(name="φ", bases=b)
+φ = d.Field(name="φ", bases=bk1)
 τ_p = d.Field(name='τ_p')
 τ_φ = d.Field(name="τ_φ")
 τ_s = d.Field(name='τ_s', bases=b_S2)
@@ -196,9 +198,6 @@ r_S2['g'][2] = 1
 
 structure = lane_emden(Nr, n_rho=n_rho, m=1.5, comm=MPI.COMM_SELF)
 
-b_ncc = de.BallBasis(c, shape=(1,1,Nr), radius=radius, dealias=dealias, dtype=np.float64)
-bk2 = b_ncc.clone_with(k=2)
-bk1 = b_ncc.clone_with(k=1)
 T = d.Field(name='T', bases=b_ncc)
 lnρ = d.Field(name='lnρ', bases=b_ncc)
 
@@ -208,25 +207,33 @@ if T['g'].size > 0 :
          T['g'][:,:,i] = structure['T'](r=r_i).evaluate()['g'].real
          lnρ['g'][:,:,i] = structure['lnρ'](r=r_i).evaluate()['g'].real
 
+T2 = d.Field(name='T2', bases=b_ncc_k2)
+T.change_scales(1)
+T2['g'] = T['g']
+
 lnT = np.log(T).evaluate()
 lnT.name='lnT'
 grad_lnT = grad(lnT).evaluate()
 grad_lnT.name='grad_lnT'
-grad_lnT1 = d.VectorField(c,name='grad_lnT1', bases=bk2)
+grad_lnT1 = d.VectorField(c,name='grad_lnT1', bases=b_ncc_k1)
 grad_lnT.change_scales(1)
 grad_lnT1['g'] = grad_lnT['g']
 ρ = np.exp(lnρ).evaluate()
 ρ.name='ρ'
-ρ2 = d.Field(name='ρ2', bases=bk2)
+ρ2 = d.Field(name='ρ2', bases=b_ncc_k2)
 ρ.change_scales(1)
 ρ2['g'] = ρ['g']
+ρ1 = d.Field(name='ρ1', bases=b_ncc_k1)
+ρ1['g'] = ρ['g']
 grad_lnρ = grad(lnρ).evaluate()
 grad_lnρ.name='grad_lnρ'
 ρT = (ρ*T).evaluate()
 ρT.name='ρT'
-ρT2 = d.Field(name='ρT2', bases=bk2)
+ρT2 = d.Field(name='ρT2', bases=b_ncc_k2)
 ρT.change_scales(1)
 ρT2['g'] = ρT['g']
+ρT1 = d.Field(name='ρT1', bases=b_ncc_k1)
+ρT1['g'] = ρT['g']
 
 # Entropy source function, inspired from MESA model
 def source_function(r):
@@ -257,12 +264,12 @@ Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
 #Problem
 problem = de.IVP([p, u, s, φ, A, τ_p, τ_u, τ_s, τ_φ, τ_A])
-problem.add_equation((ρ2*ddt(u) + ρ2*grad(p) - Co2*ρT2*grad(s) - Ek*viscous_terms + lift(τ_u,-1),
-                      - ρ*dot(u, e) - ρ*cross(ez_g, u) + cross(J,B)))
+problem.add_equation((ρ*ddt(u) + ρ2*grad(p) - Co2*ρT1*grad(s) - Ek*viscous_terms + lift(τ_u,-1),
+                      -(ρ*dot(u, e)) + ρ*cross(u, ez_g) + cross(J,B)))
 problem.add_equation((T*dot(grad_lnρ, u) + T*div(u) + τ_p, 0))
 #TO-DO: consider: add ohmic heating?
-problem.add_equation((ρT2*ddt(s) - Ek/Pr*T*(lap(s)+ dot(grad_lnT1, grad(s))) + lift(τ_s,-1),
-                      - ρT*dot(u, grad(s)) + source + 1/2*Ek/Co2*Phi))
+problem.add_equation((ρT*ddt(s) - Ek/Pr*T2*(lap(s)+ dot(grad_lnT, grad(s))) + lift(τ_s,-1),
+                      -(ρT*dot(u, grad(s))) + source + 1/2*Ek/Co2*Phi))
 problem.add_equation((div(A) + τ_φ, 0)) # coulomb gauge
 problem.add_equation((ρ2*ddt(A) + ρ2*grad(φ) - Ek/Pm*lap(A) + lift(τ_A,-1),
                         ρ2*cross(u, B) ))
