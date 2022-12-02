@@ -8,6 +8,13 @@ Options:
     --MESA               Overlay MESA L_MLT
     --output=<output>    Output directory; if blank a guess based on likely case name will be made
 """
+import logging
+logger = logging.getLogger(__name__.split('.')[-1])
+
+for system in ['matplotlib', 'h5py']:
+    dlog = logging.getLogger(system)
+    dlog.setLevel(logging.WARNING)
+
 import numpy as np
 
 import matplotlib
@@ -16,9 +23,6 @@ import matplotlib.pyplot as plt
 import pathlib
 import h5py
 import scipy.integrate as sci
-
-import logging
-logger = logging.getLogger(__name__.split('.')[-1])
 
 from docopt import docopt
 args = docopt(__doc__)

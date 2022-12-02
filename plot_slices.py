@@ -10,6 +10,12 @@ Options:
     --dpi=<dpi>          dpi for image files (if png) [default: 300]
     --remove_m0          remove m=0 component
 """
+import logging
+logger = logging.getLogger(__name__.split('.')[-1])
+
+for system in ['matplotlib', 'h5py']:
+    dlog = logging.getLogger(system)
+    dlog.setLevel(logging.WARNING)
 
 import numpy as np
 import matplotlib
@@ -30,7 +36,7 @@ def equator_plot(r, phi, data, time=None, index=None, pcm=None, cmap=None, title
     pmin,pmax = pcm.get_clim()
     if center_zero:
         cNorm = matplotlib.colors.TwoSlopeNorm(vmin=pmin, vcenter=0, vmax=pmax)
-        logger.info("centering zero: {} -- 0 -- {}".format(pmin, pmax))
+        logger.info("centering zero: {:.2g} -- 0 -- {:.2g}".format(pmin, pmax))
     else:
         cNorm = matplotlib.colors.Normalize(vmin=pmin, vmax=pmax)
 
