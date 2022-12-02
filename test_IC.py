@@ -2,7 +2,7 @@
 Test obtaining ICs in A from B via LBVP.
 
 Usage:
-    c2001_case1.py [options]
+    test_IC.py [options]
 
 Options:
     --Ntheta=<Ntheta>       Latitude coeffs [default: 32]
@@ -21,8 +21,6 @@ def test_IC(Nr, Nθ, radius=1):
     L2_set = {}
 
     # parameters
-    Ri = r_inner = 7/13
-    Ro = r_outer = 20/13
     Nφ = 2*Nθ
     dealias = 3/2
     dtype = np.float64
