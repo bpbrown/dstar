@@ -10,8 +10,8 @@ Options:
     --ConvectiveRossbySq=<Co2>           Squared Convective Rossby = Ra*Ek**2/Pr [default: 2.85e-2]
     --Prandtl=<Prandtl>                  Prandtl number  [default: 1]
 
-    --L_max=<L_max>                      Max spherical harmonic [default: 30]
-    --N_max=<N_max>                      Max radial polynomial  [default: 31]
+    --Ntheta=<Ntheta>                    Latitudinal modes [default: 32]
+    --Nr=<Nr>                            Radial modes [default: 32]
     --mesh=<mesh>                        Processor mesh for 3-D runs; if not set a sensible guess will be made
 
     --benchmark                          Use benchmark initial conditions
@@ -19,6 +19,7 @@ Options:
 
     --max_dt=<max_dt>                    Largest possible timestep [default: 0.1]
     --safety=<safety>                    CFL safety factor [default: 0.4]
+    --fixed_dt                           Fix dt
 
     --run_time_diffusion=<run_time_d>    How long to run, in diffusion times [default: 20]
     --run_time_rotation=<run_time_rot>   How long to run, in rotation timescale; overrides run_time_diffusion if set
@@ -33,22 +34,18 @@ Options:
     --label=<label>                      Additional label for run output directory
 
     --ncc_cutoff=<ncc_cutoff>            Amplitude to truncate NCC terms [default: 1e-10]
-    --debug                              Produce debugging output for NCCs
+    --plot_sparse                        Plot sparsity structures for L+M and it's LU decomposition
+
 """
 import numpy as np
-import dedalus.public as de
-from dedalus.core import arithmetic, timesteppers, problems, solvers
-from dedalus.extras.flow_tools import GlobalArrayReducer
-from dedalus.tools.parallel import Sync
-
 from mpi4py import MPI
-import time
 
 import pathlib
 import os
 import sys
 import h5py
 
+from dedalus.tools.parallel import Sync
 from docopt import docopt
 args = docopt(__doc__)
 
@@ -56,44 +53,12 @@ import logging
 logger = logging.getLogger(__name__)
 dlog = logging.getLogger('matplotlib')
 dlog.setLevel(logging.WARNING)
-from structure import lane_emden
+dlog = logging.getLogger('evaluator')
+dlog.setLevel(logging.WARNING)
 
-comm = MPI.COMM_WORLD
-rank = comm.rank
-ncpu = comm.size
-
-mesh = args['--mesh']
-if mesh is not None:
-    mesh = mesh.split(',')
-    mesh = [int(mesh[0]), int(mesh[1])]
-else:
-    log2 = np.log2(ncpu)
-    if log2 == int(log2):
-        mesh = [int(2**np.ceil(log2/2)),int(2**np.floor(log2/2))]
-logger.info("running on processor mesh={}".format(mesh))
-
-Lmax = int(args['--L_max'])
-Nmax = int(args['--N_max'])
-ncc_cutoff = float(args['--ncc_cutoff'])
-
-radius = 1
-
-Ek = Ekman = float(args['--Ekman'])
-Co2 = ConvectiveRossbySq = float(args['--ConvectiveRossbySq'])
-Pr = Prandtl = float(args['--Prandtl'])
-logger.info("Ek = {}, Co2 = {}, Pr = {}".format(Ek,Co2,Pr))
-# load balancing for real variables and parallel runs
-if Lmax % 2 == 1:
-    nm = 2*(Lmax+1)
-else:
-    nm = 2*(Lmax+2)
-
-L_dealias = 3/2
-N_dealias = 3/2
-
-data_dir = sys.argv[0].split('.py')[0]
+data_dir = './'+sys.argv[0].split('.py')[0]
 data_dir += '_Ek{}_Co{}_Pr{}'.format(args['--Ekman'],args['--ConvectiveRossbySq'],args['--Prandtl'])
-data_dir += '_L{}_N{}'.format(args['--L_max'], args['--N_max'])
+data_dir += '_Th{}_R{}'.format(args['--Ntheta'], args['--Nr'])
 if args['--benchmark']:
     data_dir += '_benchmark'
 if args['--label']:
@@ -110,243 +75,232 @@ with Sync() as sync:
         if not os.path.exists(logdir):
             os.mkdir(logdir)
 
-start_time = time.time()
-c = de.coords.SphericalCoordinates('phi', 'theta', 'r')
-d = de.distributor.Distributor((c,), mesh=mesh)
-b = de.basis.BallBasis(c, (nm,Lmax+1,Nmax+1), radius=radius, dealias=(L_dealias,L_dealias,N_dealias), dtype=np.float64)
-b_S2 = b.S2_basis()
-phi1, theta1, r1 = b.local_grids((1,1,1))
-phi, theta, r = b.local_grids((L_dealias,L_dealias,N_dealias))
-phig,thetag,rg= b.global_grids((L_dealias,L_dealias,N_dealias))
-theta_target = thetag[0,(Lmax+1)//2,0]
+import dedalus.public as de
+from dedalus.extras import flow_tools
 
-u = de.field.Field(dist=d, bases=(b,), tensorsig=(c,), dtype=np.float64)
-p = de.field.Field(dist=d, bases=(b,), dtype=np.float64)
-s = de.field.Field(dist=d, bases=(b,), dtype=np.float64)
-τ_u = de.field.Field(dist=d, bases=(b_S2,), tensorsig=(c,), dtype=np.float64)
-τ_s = de.field.Field(dist=d, bases=(b_S2,), dtype=np.float64)
+comm = MPI.COMM_WORLD
+rank = comm.rank
+ncpu = comm.size
+
+mesh = args['--mesh']
+if mesh is not None:
+    mesh = mesh.split(',')
+    mesh = [int(mesh[0]), int(mesh[1])]
+else:
+    log2 = np.log2(ncpu)
+    if log2 == int(log2):
+        mesh = [int(2**np.ceil(log2/2)),int(2**np.floor(log2/2))]
+logger.info("running on processor mesh={}".format(mesh))
+
+Nθ = int(args['--Ntheta'])
+Nr = int(args['--Nr'])
+Nφ = Nθ*2
+
+ncc_cutoff = float(args['--ncc_cutoff'])
+
+radius = 1
+
+Ek = Ekman = float(args['--Ekman'])
+Co2 = ConvectiveRossbySq = float(args['--ConvectiveRossbySq'])
+Pr = Prandtl = float(args['--Prandtl'])
+logger.info("Ek = {}, Co2 = {}, Pr = {}".format(Ek,Co2,Pr))
+
+dealias = 3/2
+
+c = de.SphericalCoordinates('phi', 'theta', 'r')
+d = de.Distributor(c, mesh=mesh, dtype=np.float64)
+b = de.BallBasis(c, shape=(Nφ,Nθ,Nr), radius=radius, dealias=dealias, dtype=np.float64)
+phi, theta, r = b.local_grids()
+
+u = d.VectorField(c, name='u', bases=b)
+p = d.Field(name='p', bases=b)
+s = d.Field(name='s', bases=b)
+τ_p = d.Field(name="τ_p")
+τ_u = d.VectorField(c, name="τ_u", bases=b.S2_basis())
+τ_s = d.Field(name="τ_s", bases=b.S2_basis())
 
 # Parameters and operators
-div = lambda A: de.operators.Divergence(A, index=0)
-lap = lambda A: de.operators.Laplacian(A, c)
-grad = lambda A: de.operators.Gradient(A, c)
-curl = lambda A: de.operators.Curl(A)
-dot = lambda A, B: arithmetic.DotProduct(A, B)
-cross = lambda A, B: arithmetic.CrossProduct(A, B)
-ddt = lambda A: de.operators.TimeDerivative(A)
-trans = lambda A: de.operators.TransposeComponents(A)
-radial = lambda A: de.operators.RadialComponent(A)
-angular = lambda A: de.operators.AngularComponent(A, index=1)
-trace = lambda A: de.operators.Trace(A)
-power = lambda A, B: de.operators.Power(A, B)
-LiftTau = lambda A, n: de.operators.LiftTau(A,b,n)
-d_exp = lambda A: de.operators.UnaryGridFunction(np.exp, A)
-d_log = lambda A: de.operators.UnaryGridFunction(np.log, A)
+div = lambda A: de.Divergence(A, index=0)
+lap = lambda A: de.Laplacian(A, c)
+grad = lambda A: de.Gradient(A, c)
+curl = lambda A: de.Curl(A)
+dot = lambda A, B: de.DotProduct(A, B)
+cross = lambda A, B: de.CrossProduct(A, B)
+ddt = lambda A: de.TimeDerivative(A)
+trans = lambda A: de.TransposeComponents(A)
+radial = lambda A: de.RadialComponent(A)
+angular = lambda A: de.AngularComponent(A, index=1)
+lift_basis = b #b.clone_with(k=2)
+lift = lambda A, n: de.LiftTau(A, b, n)
+integ = lambda A: de.Integrate(A, c)
+avg = lambda A: de.Integrate(A, c)/(4/3*np.pi*radius**3)
+shellavg = lambda A: de.Average(A, c.S2coordsys)
 
 # NCCs and variables of the problem
-ez = de.field.Field(dist=d, bases=(b,), tensorsig=(c,), dtype=np.float64)
-ez.set_scales(b.dealias)
+bk1 = b.clone_with(k=1) # ez on k+1 level to match curl(u)
+ez = d.VectorField(c, name='ez', bases=bk1)
 ez['g'][1] = -np.sin(theta)
 ez['g'][2] =  np.cos(theta)
-ez.require_scales(1)
-ez_g = de.operators.Grid(ez).evaluate()
 
-T = de.field.Field(dist=d, bases=(b.radial_basis,), dtype=np.float64)
-lnρ = de.field.Field(dist=d, bases=(b.radial_basis,), dtype=np.float64)
-ρT_inv = de.field.Field(dist=d, bases=(b,), dtype=np.float64)
-
-T['g'] = 0.5*(1-r1**2)
-lnρ['g'] = 0
-
-r_vec = de.field.Field(dist=d, bases=(b.radial_basis,), tensorsig=(c,), dtype=np.float64)
-r_vec.set_scales(b.dealias)
+r_vec = d.VectorField(c, name='r_vec', bases=b.radial_basis)
 r_vec['g'][2] = r
-r_vec.require_scales(1)
-r_vec_g = de.operators.Grid(r_vec).evaluate()
 
-logger.info("shape and size of T['g'] {} & {}".format(T['g'].shape, T['g'].size))
-logger.info("shape and size of ρT_inv['g'] {} & {}".format(ρT_inv['g'].shape, ρT_inv['g'].size))
+# Entropy source function; here constant volume heating rate
+source_func = d.Field(name='S', bases=b)
+source_func['g'] =  Ek/Pr*3
+source = de.Grid(source_func).evaluate()
 
-lnT = d_log(T).evaluate()
-T_inv = power(T,-1).evaluate()
-grad_T = grad(T).evaluate()
-grad_lnT = grad(lnT).evaluate()
-ρ = d_exp(lnρ).evaluate()
-grad_lnρ = grad(lnρ).evaluate()
-ρ_inv = d_exp(-lnρ).evaluate()
-ρT_inv_rb = (T_inv*ρ_inv).evaluate()
-ρT_inv_rb.require_scales(1)
-if ρT_inv_rb['g'].size > 0:
-    ρT_inv['g'] = ρT_inv_rb['g']
-
-# Entropy source function, inspired from MESA model
-source = de.field.Field(dist=d, bases=(b,), dtype=np.float64)
-source.require_scales(L_dealias)
-source['g'] = 3
-
-#e = 0.5*(grad(u) + trans(grad(u)))
+# for boundary condition
 e = grad(u) + trans(grad(u))
 e.store_last = True
 
-viscous_terms = div(e) + dot(grad_lnρ, e) - 2/3*grad(div(u)) - 2/3*grad_lnρ*div(u)
-trace_e = trace(e)
-trace_e.store_last = True
-Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
-
-ρ_inv['g'] = 1
-problem = problems.IVP([p, u,  τ_u, s,  τ_s], ncc_cutoff=ncc_cutoff)
-#problem.add_equation((ddt(u) + grad(p) - Co2*T*grad(s) - Ek*ρ_inv*viscous_terms + LiftTau(τ_u,-1),
-# problem.add_equation((ddt(u) + grad(p) + Co2*grad_T*s - Ek*ρ_inv*viscous_terms + LiftTau(τ_u,-1),
-problem.add_equation((div(u), 0), condition = "ntheta != 0")
-problem.add_equation((p, 0), condition = "ntheta == 0")
-problem.add_equation((ddt(u) + grad(p)  - Ek*lap(u) - Co2*r_vec*s + LiftTau(τ_u,-1),
-                      - dot(u, e) - cross(ez_g, u)), condition = "ntheta != 0")
-problem.add_equation((u, 0), condition = "ntheta == 0")
-problem.add_equation((ddt(s) - Ek/Pr*(lap(s)) + LiftTau(τ_s,-1),
-                     - dot(u, grad(s)) + Ek/Pr*source ))
+problem = de.IVP([p, u, s, τ_p, τ_u, τ_s])
+problem.add_equation((div(u) + τ_p, 0))
+problem.add_equation((ddt(u) + grad(p)  - Ek*lap(u) - Co2*r_vec*s + lift(τ_u,-1),
+                      - cross(curl(u) + ez, u) ))
+problem.add_equation((ddt(s) - Ek/Pr*(lap(s)) + lift(τ_s,-1),
+                     - dot(u, grad(s)) + source ))
 # Boundary conditions
-problem.add_equation((radial(u(r=radius)), 0), condition = "ntheta != 0")
-problem.add_equation((radial(angular(e(r=radius))), 0), condition = "ntheta != 0")
-problem.add_equation((τ_u, 0), condition = "ntheta == 0")
+problem.add_equation((radial(u(r=radius)), 0))
+problem.add_equation((radial(angular(e(r=radius))), 0))
 problem.add_equation((s(r=radius), 0))
+problem.add_equation((integ(p), 0))  # Pressure gauge
 logger.info("Problem built")
 
+s['g'] = 0.5*(1-r**2) # static solution
 
-amp = 1e-5
 if args['--benchmark']:
     amp = 1e-1
     𝓁 = int(args['--ell_benchmark'])
     norm = 1/(2**𝓁*np.math.factorial(𝓁))*np.sqrt(np.math.factorial(2*𝓁+1)/(4*np.pi))
-    s.require_scales(L_dealias)
     s['g'] += amp*norm*r**𝓁*(1-r**2)*(np.cos(𝓁*phi)+np.sin(𝓁*phi))*np.sin(theta)**𝓁
-    s['g'] += 0.5*(1-r**2)
     logger.info("benchmark run with perturbations at ell={} with norm={}".format(𝓁, norm))
 else:
-    # need a noise generator
-    raise NotImplementedError("noise ICs not implemented")
-    s['g'] += amp*noise
+    amp = 1e-5
+    noise = d.Field(name='noise', bases=b)
+    noise.fill_random('g', seed=42, distribution='standard_normal')
+    noise.low_pass_filter(scales=0.25)
+    s['g'] += amp*noise['g']
 
 # Solver
-solver = solvers.InitialValueSolver(problem, timesteppers.SBDF2)
+solver = problem.build_solver(de.SBDF2, ncc_cutoff=ncc_cutoff)
 
-reducer = GlobalArrayReducer(d.comm_cart)
-weight_theta = b.local_colatitude_weights(3/2)
-weight_r = b.local_radial_weights(3/2) #b.radial_basis.local_weights(3/2)*r**2
-vol_test = np.sum(weight_r*weight_theta+0*s['g'])*np.pi/(Lmax+1)/L_dealias
-vol_test = reducer.reduce_scalar(vol_test, MPI.SUM)
-vol = 4*np.pi/3*(radius)
-vol_correction = vol/vol_test
+KE = 0.5*dot(u,u)
+KE.store_last = True
+PE = Co2*s
+Lz = dot(cross(r_vec,u), ez)
+enstrophy = dot(curl(u),curl(u))
+enstrophy.store_last = True
 
-logger.info(vol)
-
-def vol_avg(q):
-    Q = np.sum(vol_correction*weight_r*weight_theta*q['g'])
-    Q *= (np.pi)/(Lmax+1)/L_dealias
-    Q /= (4/3*np.pi)
-    return reducer.reduce_scalar(Q, MPI.SUM)
-
-int_test = de.field.Field(dist=d, bases=(b,), dtype=np.float64)
-int_test['g']=1
-int_test.require_scales(L_dealias)
-logger.info("vol_avg(1)={}".format(vol_avg(int_test)))
-logger.info("vol_test={}".format(vol_test))
-logger.info("vol_correction={}".format(vol_correction))
-
-if rank == 0:
-    scalar_file = pathlib.Path('{:s}/scalar_output.h5'.format(data_dir)).absolute()
-    if os.path.exists(str(scalar_file)):
-        scalar_file.unlink()
-    scalar_f = h5py.File('{:s}'.format(str(scalar_file)), 'a')
-    parameter_group = scalar_f.create_group('parameters')
-    parameter_group['ConvectiveRossbySq'] = ConvectiveRossbySq
-    parameter_group['Ekman'] = Ekman
-    parameter_group['Prandtl'] = Prandtl
-    parameter_group['L'] = Lmax
-    parameter_group['N'] = Nmax
-    parameter_group['dt_max'] = float(args['--max_dt'])
-
-    scale_group = scalar_f.create_group('scales')
-    scale_group.create_dataset(name='sim_time', shape=(0,), maxshape=(None,), dtype=np.float64)
-    task_group = scalar_f.create_group('tasks')
-    scalar_keys = ['KE', 'PE', 'Re', 'Ro', 'Lz', 'E0']
-    for key in scalar_keys:
-        task_group.create_dataset(name=key, shape=(0,), maxshape=(None,), dtype=np.float64)
-    scalar_index = 0
-    scalar_f.close()
-    from collections import OrderedDict
-    scalar_data = OrderedDict()
-
+traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=10, max_writes=np.inf)
+traces.add_task(avg(KE), name='KE')
+traces.add_task(integ(KE)/Ek**2, name='E0')
+traces.add_task(np.sqrt(avg(enstrophy)), name='Ro')
+traces.add_task(np.sqrt(2/Ek*avg(KE)), name='Re')
+traces.add_task(avg(PE), name='PE')
+traces.add_task(avg(Lz), name='Lz')
+traces.add_task(shellavg(np.sqrt(dot(τ_u,τ_u))), name='τ_u')
+traces.add_task(shellavg(np.abs(τ_s)), name='τ_s')
+traces.add_task(np.abs(τ_p), name='τ_p')
 
 report_cadence = 100
-energy_report_cadence = 100
-dt = float(args['--max_dt'])
-timestepper_history = [0,1]
-hermitian_cadence = 100
+flow = flow_tools.GlobalFlowProperty(solver, cadence=report_cadence)
+flow.add_property(np.sqrt(KE*2)/Ek, name='Re')
+flow.add_property(np.sqrt(enstrophy), name='Ro')
+flow.add_property(KE, name='KE')
+flow.add_property(PE, name='PE')
+flow.add_property(Lz, name='Lz')
+flow.add_property(np.sqrt(dot(τ_u,τ_u)), name='|τ_u|')
+flow.add_property(np.abs(τ_s), name='|τ_s|')
+flow.add_property(np.abs(τ_p), name='|τ_p|')
 
-main_start = time.time()
+max_dt = float(args['--max_dt'])
+if args['--fixed_dt']:
+    dt = max_dt
+else:
+    dt = max_dt/10
+if not args['--restart']:
+    mode = 'overwrite'
+else:
+    write, dt = solver.load_state(args['--restart'])
+    mode = 'append'
+
+cfl_safety_factor = float(args['--safety'])
+CFL = flow_tools.CFL(solver, initial_dt=dt, cadence=1, safety=cfl_safety_factor, max_dt=max_dt, threshold=0.1)
+CFL.add_velocity(u)
+
+if args['--run_time_rotation']:
+    solver.stop_sim_time = float(args['--run_time_rotation'])
+else:
+    solver.stop_sim_time = float(args['--run_time_diffusion'])/Ek
+
+if args['--run_time_iter']:
+    solver.stop_iteration = int(float(args['--run_time_iter']))
+
 good_solution = True
-while solver.ok and good_solution:
-    if solver.iteration % energy_report_cadence == 0:
-        #q = (ρ*power(u,2)).evaluate() # can't eval in parallel with ρ
-        #q = (power(u,2)).evaluate()
-        #E0 = vol_avg(q)
-
-        #q = (0.5*dot(u,u)).evaluate()
-        q = (0.5*dot(u,u)).evaluate()
-        KE = vol_avg(q)
-        E0 = KE/Ek**2
-
-        q = (dot(curl(u),curl(u))).evaluate()
-        Ro = np.sqrt(vol_avg(q))
-
-        q = (dot(u,u)).evaluate()
-        Re = np.sqrt(vol_avg(q))/Ek
-
-        q = (T*s).evaluate()
-        PE = Co2*vol_avg(q)
-
-        #q = (dot(cross(r_vec_g,u), ez_g)).evaluate()
-        q = (dot(cross(r_vec,u), ez)).evaluate()
-        Lz = vol_avg(q)
-
-        logger.info("iter: {:d}, dt={:.2e}, t={:.3e} ({:.3e}), KE={:.2e} ({:.4e}), PE={:.2e}, Lz={:.2e}".format(solver.iteration, dt, solver.sim_time, solver.sim_time*Ek, KE, E0, PE, Lz))
+vol = 4*np.pi/3
+while solver.proceed and good_solution:
+    if not args['--fixed_dt']:
+        dt = CFL.compute_timestep()
+    if solver.iteration % report_cadence == 0 and solver.iteration > 0:
+        KE_avg = flow.volume_integral('KE')/vol # volume average needs a defined volume
+        E0 = flow.volume_integral('KE')/Ek**2 # integral rather than avg
+        Re_avg = flow.volume_integral('Re')/vol
+        Ro_avg = flow.volume_integral('Ro')/vol
+        PE_avg = flow.volume_integral('PE')/vol
+        Lz_avg = flow.volume_integral('Lz')/vol
+        τ_u_m = flow.max('|τ_u|')
+        τ_s_m = flow.max('|τ_s|')
+        log_string = "iter: {:d}, dt={:.1e}, t={:.3e} ({:.2e})".format(solver.iteration, dt, solver.sim_time, solver.sim_time*Ek)
+        log_string += ", KE={:.2e} ({:.6e}), PE={:.2e}".format(KE_avg, E0, PE_avg)
+        log_string += ", Re={:.1e}, Ro={:.1e}".format(Re_avg, Ro_avg)
+        log_string += ", Lz={:.1e}, τ=({:.1e},{:.1e})".format(Lz_avg, τ_u_m, τ_s_m)
+        logger.info(log_string)
         good_solution = np.isfinite(E0)
-
-        if rank == 0:
-            scalar_data['PE'] = PE
-            scalar_data['KE'] = KE
-            scalar_data['Re'] = Re
-            scalar_data['Ro'] = Ro
-            scalar_data['Lz'] = Lz
-            scalar_data['E0'] = E0
-
-            scalar_f = h5py.File('{:s}'.format(str(scalar_file)), 'a')
-            scalar_f['scales/sim_time'].resize(scalar_index+1, axis=0)
-            scalar_f['scales/sim_time'][scalar_index] = solver.sim_time
-            for key in scalar_data:
-                scalar_f['tasks/'+key].resize(scalar_index+1, axis=0)
-                scalar_f['tasks/'+key][scalar_index] = scalar_data[key]
-            scalar_index += 1
-            scalar_f.close()
-
-    elif solver.iteration % report_cadence == 0:
-        logger.info("iter: {:d}, dt={:e}, t={:e}".format(solver.iteration, dt, solver.sim_time))
-    if solver.iteration % hermitian_cadence in timestepper_history:
-        for field in solver.state:
-            field['g']
     solver.step(dt)
 
-end_time = time.time()
+solver.log_stats()
 
-startup_time = main_start - start_time
-main_loop_time = end_time - main_start
-DOF = nm*(Lmax+1)*(Nmax+1)
-niter = solver.iteration
-if rank==0:
-    print('performance metrics:')
-    print('    startup time   : {:}'.format(startup_time))
-    print('    main loop time : {:}'.format(main_loop_time))
-    print('    main loop iter : {:d}'.format(niter))
-    print('    wall time/iter : {:f}'.format(main_loop_time/niter))
-    print('          iter/sec : {:f}'.format(niter/main_loop_time))
-    print('DOF-cycles/cpu-sec : {:}'.format(DOF*niter/(ncpu*main_loop_time)))
+if args['--plot_sparse']:
+    # Plot matrices
+    import matplotlib
+    import matplotlib.pyplot as plt
+
+    # Plot options
+    fig = plt.figure(figsize=(9,3))
+    cmap = matplotlib.cm.get_cmap("winter_r")
+    clim = (-10, 0)
+    lim_margin = 0.05
+
+    def plot_sparse(A):
+        I, J = A.shape
+        A_mag = np.log10(np.abs(A.A))
+        ax.pcolor(A_mag[::-1], cmap=cmap, vmin=clim[0], vmax=clim[1])
+        ax.set_xlim(-lim_margin, I+lim_margin)
+        ax.set_ylim(-lim_margin, J+lim_margin)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_aspect('equal', 'box')
+        ax.text(0.95, 0.95, 'nnz: %i' %A.nnz, horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
+        ax.text(0.95, 0.95, '\ncon: %.1e' %np.linalg.cond(A.A), horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
+
+    for sp in solver.subproblems:
+        m = sp.group[0]
+        # Plot LHS
+        ax = fig.add_subplot(1, 3, 1)
+        LHS = (sp.M_min + sp.L_min) @ sp.pre_right
+        plot_sparse(LHS)
+        ax.set_title('LHS (m = %i)' %m)
+        # Plot L
+        ax = fig.add_subplot(1, 3, 2)
+        L = sp.LHS_solver.LU.L
+        plot_sparse(L)
+        ax.set_title('L (m = %i)' %m)
+        # Plot U
+        ax = fig.add_subplot(1, 3, 3)
+        U = sp.LHS_solver.LU.U
+        plot_sparse(U)
+        ax.set_title('U (m = %i)' %m)
+        plt.tight_layout()
+        plt.savefig(data_dir+"/m_%i.pdf" %m)
+        fig.clear()
