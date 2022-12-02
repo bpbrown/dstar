@@ -37,24 +37,18 @@ Options:
     --plot_sparse                        Plot sparsity structures for L+M and it's LU decomposition
 
 """
+import logging
+logger = logging.getLogger(__name__)
+for system in ['matplotlib', 'evaluator']:
+    dlog = logging.getLogger(system)
+    dlog.setLevel(logging.WARNING)
+
+import sys
 import numpy as np
 from mpi4py import MPI
 
-import pathlib
-import os
-import sys
-import h5py
-
-from dedalus.tools.parallel import Sync
 from docopt import docopt
 args = docopt(__doc__)
-
-import logging
-logger = logging.getLogger(__name__)
-dlog = logging.getLogger('matplotlib')
-dlog.setLevel(logging.WARNING)
-dlog = logging.getLogger('evaluator')
-dlog.setLevel(logging.WARNING)
 
 data_dir = './'+sys.argv[0].split('.py')[0]
 data_dir += '_Ek{}_Co{}_Pr{}'.format(args['--Ekman'],args['--ConvectiveRossbySq'],args['--Prandtl'])
@@ -64,16 +58,9 @@ if args['--benchmark']:
 if args['--label']:
     data_dir += '_{:s}'.format(args['--label'])
 logger.info("saving data in {}".format(data_dir))
-from dedalus.tools.config import config
-config['logging']['filename'] = os.path.join(data_dir,'logs/dedalus_log')
-config['logging']['file_level'] = 'DEBUG'
-with Sync() as sync:
-    if sync.comm.rank == 0:
-        if not os.path.exists('{:s}/'.format(data_dir)):
-            os.mkdir('{:s}/'.format(data_dir))
-        logdir = os.path.join(data_dir,'logs')
-        if not os.path.exists(logdir):
-            os.mkdir(logdir)
+
+import dedalus.tools.logging as dedalus_logging
+dedalus_logging.add_file_handler(data_dir+'/logs/dedalus_log', 'DEBUG')
 
 import dedalus.public as de
 from dedalus.extras import flow_tools
@@ -141,6 +128,14 @@ bk1 = b.clone_with(k=1) # ez on k+1 level to match curl(u)
 ez = d.VectorField(c, name='ez', bases=bk1)
 ez['g'][1] = -np.sin(theta)
 ez['g'][2] =  np.cos(theta)
+ex = d.VectorField(c, bases=b, name='ex')
+ex['g'][2] = np.sin(theta)*np.cos(phi)
+ex['g'][1] = np.cos(theta)*np.cos(phi)
+ex['g'][0] = -np.sin(phi)
+ey = d.VectorField(c, bases=b, name='ey')
+ey['g'][2] = np.sin(theta)*np.sin(phi)
+ey['g'][1] = np.cos(theta)*np.sin(phi)
+ey['g'][0] = np.cos(phi)
 
 r_vec = d.VectorField(c, name='r_vec', bases=b.radial_basis)
 r_vec['g'][2] = r
@@ -186,19 +181,19 @@ else:
 solver = problem.build_solver(de.SBDF2, ncc_cutoff=ncc_cutoff)
 
 KE = 0.5*dot(u,u)
-KE.store_last = True
 PE = Co2*s
-Lz = dot(cross(r_vec,u), ez)
+L = cross(r_vec,u)
 enstrophy = dot(curl(u),curl(u))
-enstrophy.store_last = True
 
-traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=10, max_writes=np.inf)
+traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=10, max_writes=None)
 traces.add_task(avg(KE), name='KE')
 traces.add_task(integ(KE)/Ek**2, name='E0')
 traces.add_task(np.sqrt(avg(enstrophy)), name='Ro')
 traces.add_task(np.sqrt(2/Ek*avg(KE)), name='Re')
 traces.add_task(avg(PE), name='PE')
-traces.add_task(avg(Lz), name='Lz')
+traces.add_task(avg(dot(L,ex)), name='Lx')
+traces.add_task(avg(dot(L,ey)), name='Ly')
+traces.add_task(avg(dot(L,ez)), name='Lz')
 traces.add_task(shellavg(np.sqrt(dot(τ_u,τ_u))), name='τ_u')
 traces.add_task(shellavg(np.abs(τ_s)), name='τ_s')
 traces.add_task(np.abs(τ_p), name='τ_p')
@@ -209,7 +204,9 @@ flow.add_property(np.sqrt(KE*2)/Ek, name='Re')
 flow.add_property(np.sqrt(enstrophy), name='Ro')
 flow.add_property(KE, name='KE')
 flow.add_property(PE, name='PE')
-flow.add_property(Lz, name='Lz')
+flow.add_property(dot(L,ex), name='Lx')
+flow.add_property(dot(L,ey), name='Ly')
+flow.add_property(dot(L,ez), name='Lz')
 flow.add_property(np.sqrt(dot(τ_u,τ_u)), name='|τ_u|')
 flow.add_property(np.abs(τ_s), name='|τ_s|')
 flow.add_property(np.abs(τ_p), name='|τ_p|')
@@ -248,59 +245,18 @@ while solver.proceed and good_solution:
         Re_avg = flow.volume_integral('Re')/vol
         Ro_avg = flow.volume_integral('Ro')/vol
         PE_avg = flow.volume_integral('PE')/vol
-        Lz_avg = flow.volume_integral('Lz')/vol
+        Lx_int = flow.volume_integral('Lx')
+        Ly_int = flow.volume_integral('Ly')
+        Lz_int = flow.volume_integral('Lz')
         τ_u_m = flow.max('|τ_u|')
         τ_s_m = flow.max('|τ_s|')
         log_string = "iter: {:d}, dt={:.1e}, t={:.3e} ({:.2e})".format(solver.iteration, dt, solver.sim_time, solver.sim_time*Ek)
         log_string += ", KE={:.2e} ({:.6e}), PE={:.2e}".format(KE_avg, E0, PE_avg)
         log_string += ", Re={:.1e}, Ro={:.1e}".format(Re_avg, Ro_avg)
-        log_string += ", Lz={:.1e}, τ=({:.1e},{:.1e})".format(Lz_avg, τ_u_m, τ_s_m)
+        log_string += ", Lx={:.1e}, Ly={:.1e}, Lz={:.1e}".format(Lx_int, Ly_int, Lz_int)
+        log_string += ", τ=({:.1e},{:.1e})".format(τ_u_m, τ_s_m)
         logger.info(log_string)
         good_solution = np.isfinite(E0)
     solver.step(dt)
 
 solver.log_stats()
-
-if args['--plot_sparse']:
-    # Plot matrices
-    import matplotlib
-    import matplotlib.pyplot as plt
-
-    # Plot options
-    fig = plt.figure(figsize=(9,3))
-    cmap = matplotlib.cm.get_cmap("winter_r")
-    clim = (-10, 0)
-    lim_margin = 0.05
-
-    def plot_sparse(A):
-        I, J = A.shape
-        A_mag = np.log10(np.abs(A.A))
-        ax.pcolor(A_mag[::-1], cmap=cmap, vmin=clim[0], vmax=clim[1])
-        ax.set_xlim(-lim_margin, I+lim_margin)
-        ax.set_ylim(-lim_margin, J+lim_margin)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_aspect('equal', 'box')
-        ax.text(0.95, 0.95, 'nnz: %i' %A.nnz, horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
-        ax.text(0.95, 0.95, '\ncon: %.1e' %np.linalg.cond(A.A), horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
-
-    for sp in solver.subproblems:
-        m = sp.group[0]
-        # Plot LHS
-        ax = fig.add_subplot(1, 3, 1)
-        LHS = (sp.M_min + sp.L_min) @ sp.pre_right
-        plot_sparse(LHS)
-        ax.set_title('LHS (m = %i)' %m)
-        # Plot L
-        ax = fig.add_subplot(1, 3, 2)
-        L = sp.LHS_solver.LU.L
-        plot_sparse(L)
-        ax.set_title('L (m = %i)' %m)
-        # Plot U
-        ax = fig.add_subplot(1, 3, 3)
-        U = sp.LHS_solver.LU.U
-        plot_sparse(U)
-        ax.set_title('U (m = %i)' %m)
-        plt.tight_layout()
-        plt.savefig(data_dir+"/m_%i.pdf" %m)
-        fig.clear()
