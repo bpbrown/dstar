@@ -189,9 +189,6 @@ r_vec = d.VectorField(c, name='r_vec', bases=b)
 r_vec['g'][2] = r
 r_vec_g = de.Grid(r_vec).evaluate()
 
-r_S2 = d.VectorField(c, name='r_S2')
-r_S2['g'][2] = 1
-
 from structure import lane_emden
 structure = lane_emden(Nr, n_rho=n_rho, m=1.5, comm=MPI.COMM_SELF)
 
@@ -325,11 +322,14 @@ IC_problem.add_equation((div(A) + τ_φ, 0))
 IC_problem.add_equation((-lap(A) + grad(φ) + lift(τ_A, -1), J_IC))
 IC_problem.add_equation((integ(φ), 0))
 IC_problem.add_equation((radial(grad(A)(r=radius)) + ellp1(A)(r=radius)/radius, 0))
+IC_solver = IC_problem.build_solver()
 IC_solver.solve()
 logger.info("solved for initial conditions for A")
 
-L2_error = lambda A, B: de.integ(de.dot(A-B,A-B)).evaluate()['g'][0,0,0]
-logger.debug('L2 error between curl(A) and B_IC: {:.3g}'.format(L2_error(B_IC-curl(A))))
+L2_error = lambda A, B: de.integ(de.dot(A-B,A-B)).evaluate()
+L2 = L2_error(B_IC,curl(A))
+if rank == 0:
+    logger.debug('L2 error between curl(A) and B_IC: {:.3g}'.format(L2['g'][0,0,0]))
 
 max_dt = float(args['--max_dt'])
 dt = max_dt/10
