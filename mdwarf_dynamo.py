@@ -7,8 +7,8 @@ Usage:
     mdwarf_dynamo.py [options]
 
 Options:
-    --Ekman=<Ekman>                      Ekman number    [default: 5e-5]
-    --ConvectiveRossbySq=<Co2>           Squared Convective Rossby = Ra*Ek**2/Pr [default: 7e-3]
+    --Ekman=<Ekman>                      Ekman number    [default: 1e-4]
+    --ConvectiveRossbySq=<Co2>           Squared Convective Rossby = Ra*Ek**2/Pr [default: 1e-2]
     --Prandtl=<Prandtl>                  Prandtl number  [default: 1]
     --MagneticPrandtl=<Pm>               Magnetic Prandtl number [default: 1]
     --n_rho=<n_rho>                      Density scale heights [default: 3]
@@ -28,6 +28,7 @@ Options:
     --safety=<safety>                    CFL safety factor [default: 0.4]
 
     --run_time_sim=<run_time>            How long to run, in rotating time units
+    --run_time_diffusion=<run_time_d>    How long to run, in diffusion time units
     --run_time_iter=<niter>              How long to run, in iterations
 
     --slice_dt=<slice_dt>                Cadence at which to output slices, in rotation times (P_rot = 4pi).  If not specified, a sensible guess based on sqrt(Co2) will be made.
@@ -73,7 +74,6 @@ if args['--label']:
 import dedalus.tools.logging as dedalus_logging
 dedalus_logging.add_file_handler(data_dir+'/logs/dedalus_log', 'DEBUG')
 
-
 mesh = args['--mesh']
 if mesh is not None:
     mesh = mesh.split(',')
@@ -88,15 +88,6 @@ Nθ = int(args['--Ntheta'])
 Nr = int(args['--Nr'])
 Nφ = Nθ*2
 
-if args['--run_time_iter']:
-    niter = int(float(args['--run_time_iter']))
-else:
-    niter = np.inf
-if args['--run_time_sim']:
-    run_time = float(args['--run_time_sim'])
-else:
-    run_time = np.inf
-
 ncc_cutoff = float(args['--ncc_cutoff'])
 
 n_rho = float(args['--n_rho'])
@@ -106,6 +97,17 @@ Ek = Ekman = float(args['--Ekman'])
 Co2 = ConvectiveRossbySq = float(args['--ConvectiveRossbySq'])
 Pr = Prandtl = float(args['--Prandtl'])
 Pm = MagneticPrandtl = float(args['--MagneticPrandtl'])
+
+if args['--run_time_iter']:
+    niter = int(float(args['--run_time_iter']))
+else:
+    niter = np.inf
+if args['--run_time_sim']:
+    run_time = float(args['--run_time_sim'])
+elif args['--run_time_diffusion']:
+    run_time = float(args['--run_time_diffusion'])*1/Ekman
+else:
+    run_time = np.inf
 
 import dedalus.public as de
 from dedalus.extras import flow_tools
@@ -180,6 +182,13 @@ ez['g'][1] = -np.sin(theta)
 ez['g'][2] =  np.cos(theta)
 ez_g = de.Grid(ez).evaluate()
 ez_g.name='ez_g'
+
+x = d.Field(name='x', bases=b)
+y = d.Field(name='y', bases=b)
+z = d.Field(name='z', bases=b)
+x['g'] = r*np.sin(theta)*np.cos(phi)
+y['g'] = r*np.sin(theta)*np.sin(phi)
+z['g'] = r*np.cos(theta)
 
 r_cyl = d.VectorField(c, name='r_cyl', bases=b)
 r_cyl['g'][2] =  r*np.sin(theta)
@@ -417,6 +426,9 @@ traces.add_task(avg(PE), name='PE')
 traces.add_task(integ(dot(L,ex)), name='Lx')
 traces.add_task(integ(dot(L,ey)), name='Ly')
 traces.add_task(integ(dot(L,ez)), name='Lz')
+traces.add_task(integ(-x*div(L)), name='Λx')
+traces.add_task(integ(-y*div(L)), name='Λy')
+traces.add_task(integ(-z*div(L)), name='Λz')
 traces.add_task(np.abs(τ_p), name='τ_p')
 traces.add_task(np.abs(τ_φ), name='τ_φ')
 traces.add_task(shellavg(np.abs(τ_s)), name='τ_s')

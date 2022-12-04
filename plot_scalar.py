@@ -67,21 +67,24 @@ for ax in ax_E:
     ax.legend(loc='lower left')
 fig_E.tight_layout()
 fig_E.savefig('{:s}/energies.pdf'.format(str(output_path)))
+fig_E.savefig('{:s}/energies.png'.format(str(output_path)), dpi=300)
 for ax in ax_E:
     ax.set_yscale('log')
 fig_E.savefig('{:s}/log_energies.pdf'.format(str(output_path)))
+fig_E.savefig('{:s}/log_energies.png'.format(str(output_path)), dpi=300)
 
-fluc_energy_keys = ['DRKE','MCKE','FKE']
-for key in fluc_energy_keys:
-    ax_E[0].plot(t, data[key], label=key)
-for key in fluc_energy_keys[:-1]:
-    ax_E[1].plot(t, data[key], label=key)
-ax_E[0].legend()
-ax_E[1].legend()
-ymin, ymax = ax_E[1].get_ylim()
-ax_E[1].set_ylim(max(ymin, 1e-14), min(ymax,1))
-fig_E.tight_layout()
-fig_E.savefig('{:s}/log_energies_fluc.pdf'.format(str(output_path)))
+if 'DRKE' in data:
+    fluc_energy_keys = ['DRKE','MCKE','FKE']
+    for key in fluc_energy_keys:
+        ax_E[0].plot(t, data[key], label=key)
+    for key in fluc_energy_keys[:-1]:
+        ax_E[1].plot(t, data[key], label=key)
+    ax_E[0].legend()
+    ax_E[1].legend()
+    ymin, ymax = ax_E[1].get_ylim()
+    ax_E[1].set_ylim(max(ymin, 1e-14), min(ymax,1))
+    fig_E.tight_layout()
+    fig_E.savefig('{:s}/log_energies_fluc.pdf'.format(str(output_path)))
 
 fig_tau, ax_tau = plt.subplots(nrows=2, sharex=True)
 for i in range(2):
@@ -103,6 +106,7 @@ ylims = ax_tau[1].get_ylim()
 ax_tau[1].set_ylim(max(1e-14, ylims[0]), ylims[1])
 fig_tau.tight_layout()
 fig_tau.savefig('{:s}/tau_error.pdf'.format(str(output_path)))
+fig_tau.savefig('{:s}/tau_error.png'.format(str(output_path)), dpi=300)
 
 fig_L, ax_L = plt.subplots(nrows=2, sharex=True)
 ax_L[0].plot(t, data['Lx'], label='Lx')
@@ -123,6 +127,28 @@ fig_L.tight_layout()
 fig_L.savefig('{:s}/angular_momentum.pdf'.format(str(output_path)))
 fig_L.savefig('{:s}/angular_momentum.png'.format(str(output_path)), dpi=300)
 
+
+if 'Λz' in data:
+    fig_L, ax_L = plt.subplots(nrows=2, sharex=True)
+    ax_L[0].plot(t, data['Λx'], label='Λx')
+    ax_L[0].plot(t, data['Λy'], label='Λy')
+    ax_L[0].plot(t, data['Λz'], label='Λz')
+    ax_L[1].plot(t, np.abs(data['Λx']), label='Λx')
+    ax_L[1].plot(t, np.abs(data['Λy']), label='Λy')
+    ax_L[1].plot(t, np.abs(data['Λz']), label='Λz')
+
+    for ax in ax_L:
+        if subrange:
+            ax.set_xlim(t_min,t_max)
+        ax.set_ylabel('Angular momentum flux moment')
+        ax.legend(loc='lower left')
+    ax_L[1].set_xlabel('time')
+    ax_L[1].set_yscale('log')
+    fig_L.tight_layout()
+    fig_L.savefig('{:s}/angular_momentum_flux_moment.pdf'.format(str(output_path)))
+    fig_L.savefig('{:s}/angular_momentum_flux_moment.png'.format(str(output_path)), dpi=300)
+
+
 fig_f, ax_f = plt.subplots(nrows=2, sharex=True)
 for ax in ax_f:
     ax.plot(t, data['Re'], label='Re')
@@ -139,15 +165,22 @@ ax_r.set_yscale('log') # relies on it being the last instance; poor practice
 
 fig_f.tight_layout()
 fig_f.savefig('{:s}/Re_and_Ro.pdf'.format(str(output_path)))
+fig_f.savefig('{:s}/Re_and_Ro.png'.format(str(output_path)), dpi=300)
 
+benchmark_set = ['KE', 'PE', 'Re', 'Ro', 'Lx', 'Ly', 'Lz', 'τ_u', 'τ_s', 'τ_p']
 if MHD:
-    benchmark_set = ['KE', 'ME', 'ME/KE', 'PE', 'Re', 'Ro', 'Lz', 'Lx', 'Ly', 'τ_u', 'τ_s', 'τ_p', 'τ_A', 'τ_φ']
+    benchmark_set.insert(1, 'ME/KE')
+    benchmark_set.insert(1, 'ME')
+    benchmark_set += ['τ_A', 'τ_φ']
     data['ME/KE'] = data['ME']/data['KE']
-else:
-    benchmark_set = ['KE', 'PE', 'Re', 'Ro', 'Lz', 'Lx', 'Ly', 'τ_u', 'τ_s', 'τ_p']
+
+if 'Λz' in data:
+    benchmark_set.append('Λx')
+    benchmark_set.append('Λy')
+    benchmark_set.append('Λz')
 
 i_ten = int(0.9*data[benchmark_set[0]].shape[0])
 print("total simulation time {:6.2g}".format(t[-1]-t[0]))
-print("benchmark values")
+print("benchmark values (averaged from {:g}-{:g})".format(t[i_ten], t[-1]))
 for benchmark in benchmark_set:
-    print("{:s} = {:14.12g} +- {:4.2g} (averaged from {:g}-{:g})".format(benchmark, np.mean(data[benchmark][i_ten:]), np.std(data[benchmark][i_ten:]), t[i_ten], t[-1]))
+    print("{:3s} = {:20.12e} +- {:4.2e}".format(benchmark, np.mean(data[benchmark][i_ten:]), np.std(data[benchmark][i_ten:])))
