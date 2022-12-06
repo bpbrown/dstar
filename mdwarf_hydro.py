@@ -249,17 +249,18 @@ e = grad(u) + trans(grad(u))
 
 ω = curl(u)
 #viscous_terms = div(e) + dot(grad_lnρ, e) - 2/3*grad(div(u)) - 2/3*grad_lnρ*div(u)
-viscous_terms = div(e) - 2/3*grad(div(u))
+viscous_terms = (div(e) - 2/3*grad(div(u)))
 trace_e = trace(e)
 Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
 #Problem
 problem = de.IVP([p, u, s, τ_p, τ_u, τ_s])
-problem.add_equation((ρ*ddt(u) + ρ2*grad(p) - Co2*ρT1*grad(s) - Ek*viscous_terms + lift(τ_u,-1),
-                      -(ρ*dot(u, e)) + ρ*cross(u, ez_g)))
+problem.add_equation((ρ*ddt(u) + ρ*grad(p) - Co2*ρT*grad(s) - Ek*viscous_terms + lift(τ_u,-1),
+                      -(ρ*dot(u, e)) + ρ*cross(u, ez_g) ) )#, condition='ntheta!=1')
+#problem.add_equation((div(cross(r_vec,ρ*u)), 0), condition='ntheta==1')
 problem.add_equation((T*dot(grad_lnρ, u) + T*div(u) + τ_p, 0))
 #TO-DO: consider: add ohmic heating?
-problem.add_equation((ρT*ddt(s) - Ek/Pr*T2*(lap(s)+ dot(grad_lnT, grad(s))) + lift(τ_s,-1),
+problem.add_equation((ρT*ddt(s) - Ek/Pr*T*(lap(s)+ dot(grad_lnT, grad(s))) + lift(τ_s,-1),
                       -(ρT*dot(u, grad(s))) + source + 1/2*Ek/Co2*Phi))
 # Boundary conditions
 problem.add_equation((radial(u(r=radius)), 0))
@@ -299,8 +300,9 @@ else:
     amp = 1e-5
     noise = d.Field(name='noise', bases=b)
     noise.fill_random('g', seed=42, distribution='standard_normal')
-    noise.low_pass_filter(scales=0.25)
-    s['g'] += amp*noise['g']
+    noise.low_pass_filter(scales=0.25) # was 0.25
+    noise.high_pass_filter(scales=0.125)
+    s['g'] += amp*noise['g']*(1-r**2)
 
 max_dt = float(args['--max_dt'])
 dt = max_dt/10
@@ -390,6 +392,9 @@ slices.add_task(shellavg(ρ*dot(er, u)*(p+0.5*dot(u,u))), name='F_h(r)')
 slices.add_task(shellavg(ρ*dot(er, u)*dot(u,u)), name='F_KE(r)')
 slices.add_task(shellavg(-Co2*Ek/Pr*T*dot(er, grad(s))), name='F_κ(r)')
 slices.add_task(shellavg(Co2*source), name='F_source(r)')
+
+coeffs = solver.evaluator.add_file_handler(data_dir+'/coeffs', sim_dt = slice_dt, max_writes = 10, mode=mode)
+coeffs.add_task(ρ*u, name='ρu', layout='c')
 
 report_cadence = 100
 flow = flow_tools.GlobalFlowProperty(solver, cadence=report_cadence)
