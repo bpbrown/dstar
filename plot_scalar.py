@@ -92,6 +92,7 @@ for i in range(2):
     ax_tau[i].plot(t, data['τ_u'], label=r'$\tau_{u}$')
     ax_tau[i].plot(t, data['τ_s'], label=r'$\tau_{s}$')
     ax_tau[i].plot(t, data['τ_p'], label=r'$\tau_{p}$')
+    ax_tau[i].plot(t, data['τ_L'], label=r'$\tau_{L}$')
     if MHD:
         ax_tau[i].plot(t, data['τ_A'], label=r'$\tau_{A}$')
         ax_tau[i].plot(t, data['τ_φ'], label=r'$\tau_{\phi}$')
@@ -168,7 +169,7 @@ fig_f.tight_layout()
 fig_f.savefig('{:s}/Re_and_Ro.pdf'.format(str(output_path)))
 fig_f.savefig('{:s}/Re_and_Ro.png'.format(str(output_path)), dpi=300)
 
-benchmark_set = ['KE', 'PE', 'Re', 'Ro', 'Lx', 'Ly', 'Lz', 'τ_u', 'τ_s', 'τ_p']
+benchmark_set = ['KE', 'PE', 'Re', 'Ro', 'Lx', 'Ly', 'Lz', 'τ_u', 'τ_s', 'τ_p', 'τ_L']
 if MHD:
     benchmark_set.insert(1, 'ME/KE')
     benchmark_set.insert(1, 'ME')
