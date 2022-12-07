@@ -49,7 +49,8 @@ if args['--times']:
 else:
     subrange = False
 
-energy_keys = ['KE', 'PE']
+energy_keys = ['KE']
+energy_keys.append('PE')
 if MHD:
     energy_keys.insert(1, 'ME')
 
@@ -120,7 +121,7 @@ for ax in ax_L:
     if subrange:
         ax.set_xlim(t_min,t_max)
     ax.set_ylabel('Angular Momentum')
-    ax.legend(loc='lower left')
+    ax.legend()
 ax_L[1].set_xlabel('time')
 ax_L[1].set_yscale('log')
 fig_L.tight_layout()
@@ -183,4 +184,7 @@ i_ten = int(0.9*data[benchmark_set[0]].shape[0])
 print("total simulation time {:6.2g}".format(t[-1]-t[0]))
 print("benchmark values (averaged from {:g}-{:g})".format(t[i_ten], t[-1]))
 for benchmark in benchmark_set:
-    print("{:3s} = {:20.12e} +- {:4.2e}".format(benchmark, np.mean(data[benchmark][i_ten:]), np.std(data[benchmark][i_ten:])))
+    try:
+        print("{:3s} = {:20.12e} +- {:4.2e}".format(benchmark, np.mean(data[benchmark][i_ten:]), np.std(data[benchmark][i_ten:])))
+    except:
+        print("{:3s} missing".format(benchmark))
