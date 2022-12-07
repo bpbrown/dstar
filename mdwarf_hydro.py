@@ -248,18 +248,29 @@ source.name='source'
 e = grad(u) + trans(grad(u))
 
 ω = curl(u)
-#viscous_terms = div(e) + dot(grad_lnρ, e) - 2/3*grad(div(u)) - 2/3*grad_lnρ*div(u)
 viscous_terms = (div(e) - 2/3*grad(div(u)))
 trace_e = trace(e)
 Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
+m, ell, n = d.coeff_layout.local_group_arrays(b.domain, scales=1)
+mask = (ell==1)*(n==0)
+
+τ_L = d.VectorField(c, bases=b, name='τ_L')
+τ_L.valid_modes[2] *= mask
+τ_L.valid_modes[0] = False
+τ_L.valid_modes[1] = False
+
 #Problem
-problem = de.IVP([p, u, s, τ_p, τ_u, τ_s])
-problem.add_equation((ρ*ddt(u) + ρ*grad(p) - Co2*ρT*grad(s) - Ek*viscous_terms + lift(τ_u,-1),
-                      -(ρ*dot(u, e)) + ρ*cross(u, ez_g) ) )#, condition='ntheta!=1')
-#problem.add_equation((div(cross(r_vec,ρ*u)), 0), condition='ntheta==1')
+problem = de.IVP([p, u, s, τ_p, τ_u, τ_s, τ_L])
+problem.add_equation((ρ*ddt(u) + ρ*grad(p) - Co2*ρT*grad(s) - Ek*viscous_terms + τ_L + lift(τ_u,-1),
+                      -(ρ*dot(u, e)) + ρ*cross(u, ez_g) ) )
+problem.add_equation((ρ*u, 0))
+eq = problem.equations[-1]
+eq['LHS'].valid_modes[2] *= mask
+eq['LHS'].valid_modes[0] = False
+eq['LHS'].valid_modes[1] = False
+
 problem.add_equation((T*dot(grad_lnρ, u) + T*div(u) + τ_p, 0))
-#TO-DO: consider: add ohmic heating?
 problem.add_equation((ρT*ddt(s) - Ek/Pr*T*(lap(s)+ dot(grad_lnT, grad(s))) + lift(τ_s,-1),
                       -(ρT*dot(u, grad(s))) + source + 1/2*Ek/Co2*Phi))
 # Boundary conditions
@@ -270,7 +281,7 @@ problem.add_equation((s(r=radius), 0))
 logger.info("Problem built")
 
 logger.info("NCC expansions:")
-for ncc in [ρ2, T, ρT2, (T*grad_lnρ).evaluate(), (T*grad_lnT1).evaluate()]:
+for ncc in [ρ2, T, ρT, (T*grad_lnρ).evaluate(), (T*grad_lnT1).evaluate()]:
     logger.info("{}: {}".format(ncc, np.where(np.abs(ncc['c']) >= ncc_cutoff)[0].shape))
 
 if args['--thermal_equilibrium']:
@@ -300,7 +311,7 @@ else:
     amp = 1e-5
     noise = d.Field(name='noise', bases=b)
     noise.fill_random('g', seed=42, distribution='standard_normal')
-    noise.low_pass_filter(scales=0.25) # was 0.25
+    noise.low_pass_filter(scales=0.25)
     noise.high_pass_filter(scales=0.125)
     s['g'] += amp*noise['g']*(1-r**2)
 
@@ -381,6 +392,7 @@ traces.add_task(integ(-z*div(L)), name='Λz')
 traces.add_task(np.abs(τ_p), name='τ_p')
 traces.add_task(shellavg(np.abs(τ_s)), name='τ_s')
 traces.add_task(shellavg(np.sqrt(dot(τ_u,τ_u))), name='τ_u')
+traces.add_task(shellavg(np.sqrt(dot(τ_L,τ_L))), name='τ_L')
 
 slices = solver.evaluator.add_file_handler(data_dir+'/slices', sim_dt = slice_dt, max_writes = 10, mode=mode)
 slices.add_task(s(theta=np.pi/2), name='s')
@@ -408,6 +420,7 @@ flow.add_property(dot(L,ez), name='Lz')
 flow.add_property(np.abs(τ_s), name='|τ_s|')
 flow.add_property(np.abs(τ_p), name='|τ_p|')
 flow.add_property(np.sqrt(dot(τ_u,τ_u)), name='|τ_u|')
+flow.add_property(np.sqrt(dot(τ_L,τ_L)), name='|τ_L|')
 
 # CFL
 cfl_safety_factor = float(args['--safety'])
@@ -427,12 +440,13 @@ while solver.proceed and good_solution:
         Ro_fluc_avg = np.sqrt(flow.volume_integral('Ro2_fluc')/vol)
         PE_avg = flow.volume_integral('PE')/vol
         Lz_avg = flow.volume_integral('Lz')/vol
-        max_τ = np.max([flow.max('|τ_u|'), flow.max('|τ_s|'), flow.max('|τ_p|')])
+        max_τ = np.max([flow.max('|τ_u|'), flow.max('|τ_s|'), flow.max('|τ_p|'), flow.max('|τ_L|')])
+        max_τ_L = flow.max('|τ_L|')
 
         log_string = "iter: {:d}, dt={:.1e}, t={:.3e} ({:.2e})".format(solver.iteration, dt, solver.sim_time, solver.sim_time*Ek)
         log_string += ", KE={:.2e}, PE={:.2e}".format(KE_avg, PE_avg)
         log_string += ", Re={:.1e}/{:.1e}, Ro={:.1e}/{:.1e}".format(Re_avg, Re_fluc_avg, Ro_avg, Ro_fluc_avg)
-        log_string += ", Lz={:.1e}, τ={:.1e}".format(Lz_avg, max_τ)
+        log_string += ", Lz={:.1e}, τ={:.1e},{:.1e}".format(Lz_avg, max_τ, max_τ_L)
         logger.info(log_string)
         good_solution = np.isfinite(E0)
     solver.step(dt)

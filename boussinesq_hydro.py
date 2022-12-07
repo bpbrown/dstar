@@ -172,10 +172,8 @@ problem = de.IVP([p, u, s, τ_p, τ_u, τ_s, τ_L])
 problem.add_equation((div(u) + τ_p, 0))
 problem.add_equation((ddt(u) + grad(p)  - Ek*lap(u) - Co2*r_vec*s + τ_L + lift(τ_u,-1),
                       cross(u, curl(u) + ez) ))
-#problem.add_equation((τ_L, 0))
 problem.add_equation((2*u, 0))
 eq = problem.equations[-1]
-print(eq['LHS'].valid_modes.shape)
 eq['LHS'].valid_modes[2] *= mask
 eq['LHS'].valid_modes[0] = False
 eq['LHS'].valid_modes[1] = False
