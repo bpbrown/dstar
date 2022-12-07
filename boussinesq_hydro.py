@@ -94,12 +94,14 @@ logger.info("Ek = {}, Co2 = {}, Pr = {}".format(Ek,Co2,Pr))
 
 dealias = 3/2
 
+dtype = np.float64
+
 c = de.SphericalCoordinates('phi', 'theta', 'r')
-d = de.Distributor(c, mesh=mesh, dtype=np.float64)
-b = de.BallBasis(c, shape=(Nφ,Nθ,Nr), radius=radius, dealias=dealias, dtype=np.float64)
+d = de.Distributor(c, mesh=mesh, dtype=dtype)
+b = de.BallBasis(c, shape=(Nφ,Nθ,Nr), radius=radius, dealias=dealias, dtype=dtype)
 phi, theta, r = b.local_grids()
 
-b_ncc = de.BallBasis(c, shape=(1,1,Nr), radius=radius, dealias=dealias, dtype=np.float64)
+b_ncc = de.BallBasis(c, shape=(1,1,Nr), radius=radius, dealias=dealias, dtype=dtype)
 
 u = d.VectorField(c, name='u', bases=b)
 p = d.Field(name='p', bases=b)
@@ -158,10 +160,26 @@ source = de.Grid(source_func).evaluate()
 e = grad(u) + trans(grad(u))
 e.store_last = True
 
-problem = de.IVP([p, u, s, τ_p, τ_u, τ_s])
+m, ell, n = d.coeff_layout.local_group_arrays(b.domain, scales=1)
+mask = (ell==1)*(n==0)
+
+τ_L = d.VectorField(c, bases=b, name='τ_L')
+τ_L.valid_modes[2] *= mask
+τ_L.valid_modes[0] = False
+τ_L.valid_modes[1] = False
+
+problem = de.IVP([p, u, s, τ_p, τ_u, τ_s, τ_L])
 problem.add_equation((div(u) + τ_p, 0))
-problem.add_equation((ddt(u) + grad(p)  - Ek*lap(u) - Co2*r_vec*s + lift(τ_u,-1),
+problem.add_equation((ddt(u) + grad(p)  - Ek*lap(u) - Co2*r_vec*s + τ_L + lift(τ_u,-1),
                       cross(u, curl(u) + ez) ))
+#problem.add_equation((τ_L, 0))
+problem.add_equation((2*u, 0))
+eq = problem.equations[-1]
+print(eq['LHS'].valid_modes.shape)
+eq['LHS'].valid_modes[2] *= mask
+eq['LHS'].valid_modes[0] = False
+eq['LHS'].valid_modes[1] = False
+
 problem.add_equation((ddt(s) - Ek/Pr*(lap(s)) + lift(τ_s,-1),
                      - (dot(u, grad(s))) + source ))
 # Boundary conditions
@@ -194,11 +212,14 @@ PE = Co2*s
 L = cross(r_vec,u)
 enstrophy = dot(curl(u),curl(u))
 
+coeffs = solver.evaluator.add_file_handler(data_dir+'/coeffs', sim_dt = 100, max_writes = 10)
+coeffs.add_task(u, name='ρu', layout='c')
+
 traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=10, max_writes=None)
 traces.add_task(avg(KE), name='KE')
 traces.add_task(integ(KE)/Ek**2, name='E0')
 traces.add_task(np.sqrt(avg(enstrophy)), name='Ro')
-traces.add_task(np.sqrt(2/Ek*avg(KE)), name='Re')
+traces.add_task(np.sqrt(2*avg(KE))/Ek, name='Re')
 traces.add_task(avg(PE), name='PE')
 traces.add_task(integ(dot(L,ex)), name='Lx')
 traces.add_task(integ(dot(L,ey)), name='Ly')
@@ -207,6 +228,7 @@ traces.add_task(integ(-x*div(L)), name='Λx')
 traces.add_task(integ(-y*div(L)), name='Λy')
 traces.add_task(integ(-z*div(L)), name='Λz')
 traces.add_task(shellavg(np.sqrt(dot(τ_u,τ_u))), name='τ_u')
+traces.add_task(shellavg(np.sqrt(dot(τ_L,τ_L))), name='τ_L')
 traces.add_task(shellavg(np.abs(τ_s)), name='τ_s')
 traces.add_task(np.abs(τ_p), name='τ_p')
 
@@ -220,6 +242,7 @@ flow.add_property(dot(L,ex), name='Lx')
 flow.add_property(dot(L,ey), name='Ly')
 flow.add_property(dot(L,ez), name='Lz')
 flow.add_property(np.sqrt(dot(τ_u,τ_u)), name='|τ_u|')
+flow.add_property(np.sqrt(dot(τ_L,τ_L)), name='|τ_L|')
 flow.add_property(np.abs(τ_s), name='|τ_s|')
 flow.add_property(np.abs(τ_p), name='|τ_p|')
 
@@ -262,11 +285,12 @@ while solver.proceed and good_solution:
         Lz_int = flow.volume_integral('Lz')
         τ_u_m = flow.max('|τ_u|')
         τ_s_m = flow.max('|τ_s|')
+        τ_L_m = flow.max('|τ_L|')
         log_string = "iter: {:d}, dt={:.1e}, t={:.3e} ({:.2e})".format(solver.iteration, dt, solver.sim_time, solver.sim_time*Ek)
         log_string += ", KE={:.2e} ({:.6e}), PE={:.2e}".format(KE_avg, E0, PE_avg)
         log_string += ", Re={:.1e}, Ro={:.1e}".format(Re_avg, Ro_avg)
-        log_string += ", Lx={:.1e}, Ly={:.1e}, Lz={:.1e}".format(Lx_int, Ly_int, Lz_int)
-        log_string += ", τ=({:.1e},{:.1e})".format(τ_u_m, τ_s_m)
+        log_string += ", L=({:.1e},{:.1e},{:.1e})".format(Lx_int, Ly_int, Lz_int)
+        log_string += ", τ=({:.1e},{:.1e},{:.1e})".format(τ_u_m, τ_s_m, τ_L_m)
         logger.info(log_string)
         good_solution = np.isfinite(E0)
     solver.step(dt)
