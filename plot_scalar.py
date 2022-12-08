@@ -130,25 +130,24 @@ fig_L.savefig('{:s}/angular_momentum.pdf'.format(str(output_path)))
 fig_L.savefig('{:s}/angular_momentum.png'.format(str(output_path)), dpi=300)
 
 
-if 'Λz' in data:
-    fig_L, ax_L = plt.subplots(nrows=2, sharex=True)
-    ax_L[0].plot(t, data['Λx'], label='Λx')
-    ax_L[0].plot(t, data['Λy'], label='Λy')
-    ax_L[0].plot(t, data['Λz'], label='Λz')
-    ax_L[1].plot(t, np.abs(data['Λx']), label='Λx')
-    ax_L[1].plot(t, np.abs(data['Λy']), label='Λy')
-    ax_L[1].plot(t, np.abs(data['Λz']), label='Λz')
+fig_L, ax_L = plt.subplots(nrows=2, sharex=True)
+ax_L[0].plot(t, data['Λx'], label='Λx')
+ax_L[0].plot(t, data['Λy'], label='Λy')
+ax_L[0].plot(t, data['Λz'], label='Λz')
+ax_L[1].plot(t, np.abs(data['Λx']), label='Λx')
+ax_L[1].plot(t, np.abs(data['Λy']), label='Λy')
+ax_L[1].plot(t, np.abs(data['Λz']), label='Λz')
 
-    for ax in ax_L:
-        if subrange:
-            ax.set_xlim(t_min,t_max)
-        ax.set_ylabel('Angular momentum flux moment')
-        ax.legend(loc='lower left')
-    ax_L[1].set_xlabel('time')
-    ax_L[1].set_yscale('log')
-    fig_L.tight_layout()
-    fig_L.savefig('{:s}/angular_momentum_flux_moment.pdf'.format(str(output_path)))
-    fig_L.savefig('{:s}/angular_momentum_flux_moment.png'.format(str(output_path)), dpi=300)
+for ax in ax_L:
+    if subrange:
+        ax.set_xlim(t_min,t_max)
+    ax.set_ylabel(r'$\mathbf{\Lambda}=\mathbf{x}(\mathbf{\nabla}\cdot\mathbf{L})$')
+    ax.legend(loc='lower left')
+ax_L[1].set_xlabel('time')
+ax_L[1].set_yscale('log')
+fig_L.tight_layout()
+fig_L.savefig('{:s}/angular_momentum_flux_moment.pdf'.format(str(output_path)))
+fig_L.savefig('{:s}/angular_momentum_flux_moment.png'.format(str(output_path)), dpi=300)
 
 
 fig_f, ax_f = plt.subplots(nrows=2, sharex=True)
