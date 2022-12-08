@@ -274,7 +274,7 @@ mask = (ell==1)*(n==0)
 τ_L.valid_modes[1] = False
 
 #Problem
-problem = de.IVP([p, u, s, φ, A, τ_p, τ_u, τ_s, τ_φ, τ_A, τ_L)
+problem = de.IVP([p, u, s, φ, A, τ_p, τ_u, τ_s, τ_φ, τ_A, τ_L])
 problem.add_equation((ρ*ddt(u) + ρ2*grad(p) - Co2*ρT1*grad(s) - Ek*viscous_terms + τ_L + lift(τ_u,-1),
                       -(ρ*dot(u, e)) + ρ*cross(u, ez_g) + cross(J,B)))
 problem.add_equation((ρ*u, 0))
