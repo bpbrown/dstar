@@ -33,6 +33,7 @@ Options:
 
     --label=<label>                      Additional label for run output directory
 
+    --violate_L_cons                     If set, disable angular momentum conservation
     --ncc_cutoff=<ncc_cutoff>            Amplitude to truncate NCC terms [default: 1e-10]
     --plot_sparse                        Plot sparsity structures for L+M and it's LU decomposition
 
@@ -53,6 +54,8 @@ args = docopt(__doc__)
 data_dir = './'+sys.argv[0].split('.py')[0]
 data_dir += '_Ek{}_Co{}_Pr{}'.format(args['--Ekman'],args['--ConvectiveRossbySq'],args['--Prandtl'])
 data_dir += '_Th{}_R{}'.format(args['--Ntheta'], args['--Nr'])
+if args['--violate_L_cons']:
+    data_dir += '_badL'
 if args['--benchmark']:
     data_dir += '_benchmark'
 if args['--label']:
@@ -151,6 +154,9 @@ z['g'] = r*np.cos(theta)
 r_vec = d.VectorField(c, name='r_vec', bases=b_ncc)
 r_vec['g'][2] = r
 
+L_cons_ncc = d.Field(name='L_cons_ncc', bases=b_ncc)
+L_cons_ncc['g'] = 2
+
 # Entropy source function; here constant volume heating rate
 source_func = d.Field(name='S', bases=b)
 source_func['g'] =  Ek/Pr*3
@@ -158,10 +164,11 @@ source = de.Grid(source_func).evaluate()
 
 # for boundary condition
 e = grad(u) + trans(grad(u))
-e.store_last = True
 
 m, ell, n = d.coeff_layout.local_group_arrays(b.domain, scales=1)
 mask = (ell==1)*(n==0)
+if args['--violate_L_cons']:
+    mask = False
 
 τ_L = d.VectorField(c, bases=b, name='τ_L')
 τ_L.valid_modes[2] *= mask
@@ -172,7 +179,7 @@ problem = de.IVP([p, u, s, τ_p, τ_u, τ_s, τ_L])
 problem.add_equation((div(u) + τ_p, 0))
 problem.add_equation((ddt(u) + grad(p)  - Ek*lap(u) - Co2*r_vec*s + τ_L + lift(τ_u,-1),
                       cross(u, curl(u) + ez) ))
-problem.add_equation((2*u, 0))
+problem.add_equation((L_cons_ncc*u, 0))
 eq = problem.equations[-1]
 eq['LHS'].valid_modes[2] *= mask
 eq['LHS'].valid_modes[0] = False
@@ -196,14 +203,15 @@ if args['--benchmark']:
     s['g'] += amp*norm*r**𝓁*(1-r**2)*(np.cos(𝓁*phi)+np.sin(𝓁*phi))*np.sin(theta)**𝓁
     logger.info("benchmark run with perturbations at ell={} with norm={}".format(𝓁, norm))
 else:
-    amp = 1e-5
+    amp = 1e-1
     noise = d.Field(name='noise', bases=b)
     noise.fill_random('g', seed=42, distribution='standard_normal')
     noise.low_pass_filter(scales=0.25)
-    s['g'] += amp*noise['g']
+    noise.high_pass_filter(scales=0.125)
+    s['g'] += amp*noise['g']*(1-r**2) # taper to boundary
 
 # Solver
-solver = problem.build_solver(de.SBDF2, ncc_cutoff=ncc_cutoff)
+solver = problem.build_solver(de.SBDF4, ncc_cutoff=ncc_cutoff)
 
 KE = 0.5*dot(u,u)
 PE = Co2*s
@@ -212,6 +220,7 @@ enstrophy = dot(curl(u),curl(u))
 
 coeffs = solver.evaluator.add_file_handler(data_dir+'/coeffs', sim_dt = 100, max_writes = 10)
 coeffs.add_task(u, name='ρu', layout='c')
+coeffs.add_task(τ_u, name='τ_u', layout='c')
 
 traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=10, max_writes=None)
 traces.add_task(avg(KE), name='KE')

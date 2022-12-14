@@ -36,6 +36,8 @@ Options:
     --restart=<restart>                  Merged chechpoint file to restart from.
                                          Make sure "--label" is set to avoid overwriting the previous run.
 
+    --violate_L_cons
+
     --label=<label>                      Additional label for run output directory
 
     --ncc_cutoff=<ncc_cutoff>            Amplitude to truncate NCC terms [default: 1e-10]
@@ -65,6 +67,8 @@ data_dir += '_Co{}_Ek{}_Pr{}'.format(args['--ConvectiveRossbySq'],args['--Ekman'
 data_dir += '_Th{}_R{}'.format(args['--Ntheta'], args['--Nr'])
 if args['--thermal_equilibrium']:
     data_dir += '_therm'
+if args['--violate_L_cons']:
+    data_dir += '_badL'
 if args['--benchmark']:
     data_dir += '_benchmark'
 if args['--label']:
@@ -254,6 +258,8 @@ Phi = trace(dot(e, e)) - 1/3*(trace_e*trace_e)
 
 m, ell, n = d.coeff_layout.local_group_arrays(b.domain, scales=1)
 mask = (ell==1)*(n==0)
+if args['--violate_L_cons']:
+    mask = False
 
 τ_L = d.VectorField(c, bases=b, name='τ_L')
 τ_L.valid_modes[2] *= mask
