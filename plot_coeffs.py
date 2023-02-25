@@ -69,6 +69,7 @@ if __name__ == "__main__":
                 n = task.dims[4][0][:]
                 mask = ((m == 0) + (m == 1))*(ell == 1)*(n == 0)
                 data.append(task[k][reg][mask])
+        f.close()
     data = np.array(data).T
 
     fig, ax = plt.subplots(nrows=2, sharex=True)
@@ -80,8 +81,8 @@ if __name__ == "__main__":
     ax[1].plot(times, np.abs(data[3,:]), label=r'$\ell=1,m=1c,n=0$')
     ax[1].plot(times, np.abs(data[1,:]), label=r'$\ell=1,m=0c,n=0$')
     ax[1].set_xlabel('time')
-    ax[0].set_ylabel(r'$\rho u$')
-    ax[1].set_ylabel(r'$\rho u$')
+    ax[0].set_ylabel(r'$\rho u^{0}$')
+    ax[1].set_ylabel(r'$|\rho u^{0}|$')
     ax[1].set_yscale('log')
     ax[0].legend()
     ax[1].legend()

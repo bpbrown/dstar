@@ -415,12 +415,12 @@ Re2_fluc = dot(u_fluc,u_fluc)*(ρ/Ek)**2
 if args['--slice_dt']:
     slice_dt = float(args['--slice_dt'])
 else:
-    slice_dt = 10/np.sqrt(Co2)
+    slice_dt = 2.5/np.sqrt(Co2)
 
 if args['--scalar_dt']:
     scalar_dt = float(args['--scalar_dt'])
 else:
-    scalar_dt = 1/np.sqrt(Co2)
+    scalar_dt = 0.25/np.sqrt(Co2)
 
 logger.debug('output cadences: slices = {:}, scalar_dt = {:}'.format(slice_dt, scalar_dt))
 
@@ -451,7 +451,7 @@ traces.add_task(shellavg(np.sqrt(dot(τ_u,τ_u))), name='τ_u')
 traces.add_task(shellavg(np.sqrt(dot(τ_A,τ_A))), name='τ_A')
 traces.add_task(shellavg(np.sqrt(dot(τ_L,τ_L))), name='τ_L')
 
-slices = solver.evaluator.add_file_handler(data_dir+'/slices', sim_dt = slice_dt, max_writes = 10, mode=mode)
+slices = solver.evaluator.add_file_handler(data_dir+'/slices', sim_dt = slice_dt, max_writes = 20, mode=mode)
 slices.add_task(s(theta=np.pi/2), name='s')
 slices.add_task(enstrophy(theta=np.pi/2), name='enstrophy')
 slices.add_task(azavg(Ωz), name='<Ωz>')

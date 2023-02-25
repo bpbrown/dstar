@@ -180,6 +180,8 @@ if 'Λz' in data:
     benchmark_set.append('Λy')
     benchmark_set.append('Λz')
 
+
+
 i_ten = int(0.9*data[benchmark_set[0]].shape[0])
 print("total simulation time {:6.2g}".format(t[-1]-t[0]))
 print("benchmark values (averaged from {:g}-{:g})".format(t[i_ten], t[-1]))
