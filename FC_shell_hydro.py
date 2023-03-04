@@ -189,6 +189,14 @@ shellavg = lambda A: de.Average(A, coords.S2coordsys)
 avg = lambda A: de.Integrate(A, coords)/(4/3*np.pi*radius**3)
 
 # NCCs and variables of the problem
+ex = dist.VectorField(coords, bases=basis, name='ex')
+ex['g'][2] = np.sin(theta)*np.cos(phi)
+ex['g'][1] = np.cos(theta)*np.cos(phi)
+ex['g'][0] = -np.sin(phi)
+ey = dist.VectorField(coords, bases=basis, name='ey')
+ey['g'][2] = np.sin(theta)*np.sin(phi)
+ey['g'][1] = np.cos(theta)*np.sin(phi)
+ey['g'][0] = np.cos(phi)
 ez = dist.VectorField(coords, name='ez', bases=basis)
 ez['g'][1] = -np.sin(theta)
 ez['g'][2] =  np.cos(theta)
@@ -367,8 +375,8 @@ Ma2_ad = 1/(γ-1)*u@u/h
 PE = scrC*ρ*T*s
 PE.name = 'PE'
 
-Lz = cross(r_vec,ρ*u)@ez
-Lz.name='Lz'
+L = cross(r_vec,ρ*u)
+L.name='L'
 
 enstrophy = curl(u)@curl(u)
 enstrophy_fluc = curl(u_fluc)@curl(u_fluc)
@@ -389,7 +397,9 @@ traces.add_task(np.sqrt(avg(Re2)), name='Re')
 traces.add_task(np.sqrt(avg(enstrophy_fluc)), name='Ro_fluc')
 traces.add_task(np.sqrt(avg(Re2_fluc)), name='Re_fluc')
 traces.add_task(avg(PE), name='PE')
-traces.add_task(avg(Lz), name='Lz')
+traces.add_task(integ(L@ex), name='Lx')
+traces.add_task(integ(L@ey), name='Ly')
+traces.add_task(integ(L@ez), name='Lz')
 traces.add_task(shellavg(np.abs(τ_s1)), name='τ_s1')
 traces.add_task(shellavg(np.abs(τ_s2)), name='τ_s2')
 traces.add_task(shellavg(np.sqrt(τ_u1@τ_u1)), name='τ_u1')
@@ -416,7 +426,7 @@ flow.add_property(enstrophy_fluc, name='Ro2_fluc')
 flow.add_property(KE, name='KE')
 flow.add_property(Ma2_ad, name='Ma2')
 flow.add_property(PE, name='PE')
-flow.add_property(Lz, name='Lz')
+flow.add_property(L@ez, name='Lz')
 flow.add_property(np.abs(τ_s1), name='|τ_s1|')
 flow.add_property(np.abs(τ_s2), name='|τ_s2|')
 flow.add_property(np.sqrt(τ_u1@τ_u1), name='|τ_u1|')

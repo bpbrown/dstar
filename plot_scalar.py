@@ -89,10 +89,17 @@ if 'DRKE' in data:
 
 fig_tau, ax_tau = plt.subplots(nrows=2, sharex=True)
 for i in range(2):
-    ax_tau[i].plot(t, data['τ_u'], label=r'$\tau_{u}$')
-    ax_tau[i].plot(t, data['τ_s'], label=r'$\tau_{s}$')
-    ax_tau[i].plot(t, data['τ_p'], label=r'$\tau_{p}$')
-    ax_tau[i].plot(t, data['τ_L'], label=r'$\tau_{L}$')
+    if 'τ_u1' in data:
+        p = ax_tau[i].plot(t, data['τ_u1'], label=r'$\tau_{u}$')
+        ax_tau[i].plot(t, data['τ_u2'], linestyle='dashed', color=p[0].get_color())
+        p = ax_tau[i].plot(t, data['τ_s1'], label=r'$\tau_{s}$')
+        ax_tau[i].plot(t, data['τ_s2'], linestyle='dashed', color=p[0].get_color())
+    else:
+        ax_tau[i].plot(t, data['τ_u'], label=r'$\tau_{u}$')
+        ax_tau[i].plot(t, data['τ_s'], label=r'$\tau_{s}$')
+        ax_tau[i].plot(t, data['τ_p'], label=r'$\tau_{p}$')
+        ax_tau[i].plot(t, data['τ_L'], label=r'$\tau_{L}$')
+
     if MHD:
         ax_tau[i].plot(t, data['τ_A'], label=r'$\tau_{A}$')
         ax_tau[i].plot(t, data['τ_φ'], label=r'$\tau_{\phi}$')
@@ -129,25 +136,25 @@ fig_L.tight_layout()
 fig_L.savefig('{:s}/angular_momentum.pdf'.format(str(output_path)))
 fig_L.savefig('{:s}/angular_momentum.png'.format(str(output_path)), dpi=300)
 
+if 'Λz' in data:
+    fig_L, ax_L = plt.subplots(nrows=2, sharex=True)
+    ax_L[0].plot(t, data['Λx'], label='Λx')
+    ax_L[0].plot(t, data['Λy'], label='Λy')
+    ax_L[0].plot(t, data['Λz'], label='Λz')
+    ax_L[1].plot(t, np.abs(data['Λx']), label='Λx')
+    ax_L[1].plot(t, np.abs(data['Λy']), label='Λy')
+    ax_L[1].plot(t, np.abs(data['Λz']), label='Λz')
 
-fig_L, ax_L = plt.subplots(nrows=2, sharex=True)
-ax_L[0].plot(t, data['Λx'], label='Λx')
-ax_L[0].plot(t, data['Λy'], label='Λy')
-ax_L[0].plot(t, data['Λz'], label='Λz')
-ax_L[1].plot(t, np.abs(data['Λx']), label='Λx')
-ax_L[1].plot(t, np.abs(data['Λy']), label='Λy')
-ax_L[1].plot(t, np.abs(data['Λz']), label='Λz')
-
-for ax in ax_L:
-    if subrange:
-        ax.set_xlim(t_min,t_max)
-    ax.set_ylabel(r'$\mathbf{\Lambda}=\mathbf{x}(\mathbf{\nabla}\cdot\mathbf{L})$')
-    ax.legend(loc='lower left')
-ax_L[1].set_xlabel('time')
-ax_L[1].set_yscale('log')
-fig_L.tight_layout()
-fig_L.savefig('{:s}/angular_momentum_flux_moment.pdf'.format(str(output_path)))
-fig_L.savefig('{:s}/angular_momentum_flux_moment.png'.format(str(output_path)), dpi=300)
+    for ax in ax_L:
+        if subrange:
+            ax.set_xlim(t_min,t_max)
+        ax.set_ylabel(r'$\mathbf{\Lambda}=\mathbf{x}(\mathbf{\nabla}\cdot\mathbf{L})$')
+        ax.legend(loc='lower left')
+    ax_L[1].set_xlabel('time')
+    ax_L[1].set_yscale('log')
+    fig_L.tight_layout()
+    fig_L.savefig('{:s}/angular_momentum_flux_moment.pdf'.format(str(output_path)))
+    fig_L.savefig('{:s}/angular_momentum_flux_moment.png'.format(str(output_path)), dpi=300)
 
 
 fig_f, ax_f = plt.subplots(nrows=2, sharex=True)
@@ -168,7 +175,12 @@ fig_f.tight_layout()
 fig_f.savefig('{:s}/Re_and_Ro.pdf'.format(str(output_path)))
 fig_f.savefig('{:s}/Re_and_Ro.png'.format(str(output_path)), dpi=300)
 
-benchmark_set = ['KE', 'PE', 'Re', 'Ro', 'Lx', 'Ly', 'Lz', 'τ_u', 'τ_s', 'τ_p', 'τ_L']
+benchmark_set = ['KE', 'PE', 'Re', 'Ro', 'Lx', 'Ly', 'Lz']
+if 'τ_u1' in data:
+    benchmark_set += ['τ_u1', 'τ_u2', 'τ_s1', 'τ_s2']
+else:
+    benchmark_set += ['τ_u', 'τ_s', 'τ_p', 'τ_L']
+
 if MHD:
     benchmark_set.insert(1, 'ME/KE')
     benchmark_set.insert(1, 'ME')
