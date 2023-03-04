@@ -271,20 +271,47 @@ viscous_terms = div(e) - 2/3*grad(div(u))
 trace_e = trace(e)
 Phi = trace(e@e) - 1/3*(trace_e*trace_e)
 
+# angular momentum conservation in shells
+m, ell, n = dist.coeff_layout.local_group_arrays(basis.domain, scales=1)
+mask = (ell==1)*(n==0)
+
+τ_L = dist.VectorField(coords, bases=basis, name='τ_L')
+τ_L.valid_modes[2] *= mask
+τ_L.valid_modes[0] = False
+τ_L.valid_modes[1] = False
+L_cons_ncc = dist.Field(bases=basis_ncc, name='L_cons_ncc')
+# suppress aliasing errors in the L_cons_ncc
+padded = (1,1,4)
+L_cons_ncc.change_scales(padded)
+phi_pad, theta_pad, r_pad = dist.local_grids(basis, scales=padded)
+
+R_avg = (Ro+Ri)/2
+if args['--Legendre']:
+    L_cons_ncc['g'] = (r_pad/R_avg)**3
+else:
+    L_cons_ncc['g'] = (r_pad/R_avg)**3*np.sqrt((r_pad/Ro-1)*(1-r_pad/Ri))
+L_cons_ncc.change_scales(1)
+
+
 logger.info("NCC expansions:")
-for ncc in [ρ0, ρ0*grad(h0), ρ0*h0, ρ0*grad(θ0), h0*grad(Υ0)]:
+for ncc in [ρ0, ρ0*grad(h0), ρ0*h0, ρ0*grad(θ0), h0*grad(Υ0), L_cons_ncc*ρ0]:
     logger.info("{}: {}".format(ncc.evaluate(), np.where(np.abs(ncc.evaluate()['c']) >= ncc_cutoff)[0].shape))
 
 #Problem
-problem = de.IVP([u, Υ, θ, s, τ_u1, τ_u2, τ_s1, τ_s2])
+problem = de.IVP([u, Υ, θ, s, τ_u1, τ_u2, τ_s1, τ_s2, τ_L])
 problem.add_equation((ρ0*(ddt(u) + scrC*(h0*grad(θ) + grad_h0*θ)
                       - scrC*h0*grad(s))
                       - Ek*viscous_terms
-                      + lift(τ_u1,-1) + lift(τ_u2,-2),
+                      + lift(τ_u1,-1) + lift(τ_u2,-2) + τ_L,
                       -ρ0_g*((u@grad(u)) + cross(ez_g, u))
                       -scrC*ρ0_grad_h0_g*(np.expm1(θ)-θ)
                       -scrC*ρ0_h0_g*np.expm1(θ)*grad(θ)
                       -scrC*ρ0_h0_g*np.expm1(θ)*grad(s)))
+problem.add_equation((L_cons_ncc*ρ0*u, 0))
+eq = problem.equations[-1]
+eq['LHS'].valid_modes[2] *= mask
+eq['LHS'].valid_modes[0] = False
+eq['LHS'].valid_modes[1] = False
 problem.add_equation((h0*(ddt(Υ) + div(u) + u@grad_Υ0), # + lift(τ_u2,-1)@er
                       -h0_g*(u@grad(Υ)) ))
 problem.add_equation((θ - (γ-1)*Υ - γ*s, 0)) #EOS, s_c/cP = 1
@@ -404,6 +431,7 @@ traces.add_task(shellavg(np.abs(τ_s1)), name='τ_s1')
 traces.add_task(shellavg(np.abs(τ_s2)), name='τ_s2')
 traces.add_task(shellavg(np.sqrt(τ_u1@τ_u1)), name='τ_u1')
 traces.add_task(shellavg(np.sqrt(τ_u2@τ_u2)), name='τ_u2')
+traces.add_task(shellavg(np.sqrt(τ_L@τ_L)), name='τ_L')
 
 slice_dt = float(args['--slice_dt'])
 slices = solver.evaluator.add_file_handler(data_dir+'/slices', sim_dt = slice_dt, max_writes = 10, mode=mode)
@@ -431,6 +459,7 @@ flow.add_property(np.abs(τ_s1), name='|τ_s1|')
 flow.add_property(np.abs(τ_s2), name='|τ_s2|')
 flow.add_property(np.sqrt(τ_u1@τ_u1), name='|τ_u1|')
 flow.add_property(np.sqrt(τ_u2@τ_u2), name='|τ_u2|')
+flow.add_property(np.sqrt(τ_L@τ_L), name='|τ_L|')
 
 # CFL
 cfl_safety_factor = float(args['--safety'])
@@ -452,11 +481,12 @@ while solver.proceed and good_solution:
         Lz_avg = flow.volume_integral('Lz')/vol
         Ma_avg = np.sqrt(flow.volume_integral('Ma2')/vol)
         max_τ = np.max([flow.max('|τ_u1|'), flow.max('|τ_u2|'), flow.max('|τ_s1|'), flow.max('|τ_s2|')])
+        τ_L = flow.max('|τ_L|')
 
-        log_string = "iter: {:d}, dt={:.1e}, t={:.3e} ({:.2e})".format(solver.iteration, dt, solver.sim_time, solver.sim_time*Ek)
+        log_string = "iter: {:d}, dt={:.1e}, t={:.2e} ({:.2e})".format(solver.iteration, dt, solver.sim_time, solver.sim_time*Ek)
         log_string += ", Ma={:.2e}, KE={:.2e}, PE={:.2e}".format(Ma_avg, KE_avg, PE_avg)
-        log_string += ", Re={:.1e}/{:.1e}, Ro={:.1e}/{:.1e}".format(Re_avg, Re_fluc_avg, Ro_avg, Ro_fluc_avg)
-        log_string += ", Lz={:.1e}, τ={:.1e}".format(Lz_avg, max_τ)
+        log_string += ", Re={:.1e}, Ro={:.1e}".format(Re_fluc_avg, Ro_fluc_avg)
+        log_string += ", Lz={:.1e}, τ={:.1e}, τ_L={:.1e}".format(Lz_avg, max_τ, τ_L)
         logger.info(log_string)
         good_solution = np.isfinite(E0)
     solver.step(dt)

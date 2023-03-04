@@ -98,7 +98,7 @@ for i in range(2):
         ax_tau[i].plot(t, data['τ_u'], label=r'$\tau_{u}$')
         ax_tau[i].plot(t, data['τ_s'], label=r'$\tau_{s}$')
         ax_tau[i].plot(t, data['τ_p'], label=r'$\tau_{p}$')
-        ax_tau[i].plot(t, data['τ_L'], label=r'$\tau_{L}$')
+    ax_tau[i].plot(t, data['τ_L'], label=r'$\tau_{L}$')
 
     if MHD:
         ax_tau[i].plot(t, data['τ_A'], label=r'$\tau_{A}$')
@@ -179,7 +179,8 @@ benchmark_set = ['KE', 'PE', 'Re', 'Ro', 'Lx', 'Ly', 'Lz']
 if 'τ_u1' in data:
     benchmark_set += ['τ_u1', 'τ_u2', 'τ_s1', 'τ_s2']
 else:
-    benchmark_set += ['τ_u', 'τ_s', 'τ_p', 'τ_L']
+    benchmark_set += ['τ_u', 'τ_s', 'τ_p']
+benchmark_set += ['τ_L']
 
 if MHD:
     benchmark_set.insert(1, 'ME/KE')
