@@ -299,14 +299,16 @@ for ncc in [ρ0, ρ0*grad(h0), ρ0*h0, ρ0*grad(θ0), h0*grad(Υ0), L_cons_ncc*�
 
 #Problem
 problem = de.IVP([u, Υ, θ, s, τ_u1, τ_u2, τ_s1, τ_s2, τ_L])
-problem.add_equation((ρ0*(ddt(u) + scrC*(h0*grad(θ) + grad_h0*θ)
-                      - scrC*h0*grad(s))
+problem.add_equation((ρ0*ddt(u) # assumes grad_s0 = 0
+                      + Co2*ρ0*h0*grad(θ)
+                      + Co2*ρ0*h0*grad_h0*θ
+                      - Co2*ρ0*h0*grad(s)
                       - Ek*viscous_terms
                       + lift(τ_u1,-1) + lift(τ_u2,-2) + τ_L,
                       -ρ0_g*((u@grad(u)) + cross(ez_g, u))
-                      -scrC*ρ0_grad_h0_g*(np.expm1(θ)-θ)
-                      -scrC*ρ0_h0_g*np.expm1(θ)*grad(θ)
-                      -scrC*ρ0_h0_g*np.expm1(θ)*grad(s)))
+                      -Co2*ρ0_grad_h0_g*(np.expm1(θ)-θ)
+                      -Co2*ρ0_h0_g*np.expm1(θ)*grad(θ)
+                      +Co2*ρ0_h0_g*np.expm1(θ)*grad(s) ))
 problem.add_equation((L_cons_ncc*ρ0*u, 0))
 eq = problem.equations[-1]
 eq['LHS'].valid_modes[2] *= mask
@@ -322,7 +324,7 @@ problem.add_equation((ρ0*(ddt(s))
                       + lift(τ_s1,-1) + lift(τ_s2,-2),
                       - ρ0_g*(u@grad(s))
                       + Ek/Pr*grad(θ)@grad(θ)
-                      + Ek/scrC*0.5*h0_inv_g*Phi
+                      #+ Ek/scrC*0.5*h0_inv_g*Phi
                       + source_g ))
 # Boundary conditions
 problem.add_equation((radial(u(r=Ri)), 0))
@@ -335,14 +337,32 @@ logger.info("Problem built")
 
 if args['--thermal_equilibrium']:
     logger.info("solving for thermal equilbrium")
-    equilibrium = de.LBVP([θ, s, τ_s1, τ_s2])
-    equilibrium.add_equation((- Ek/Pr*(lap(θ)+2*grad_θ0@grad(θ))
+    dist_eq = de.Distributor(coords, comm=None, dtype=dtype)
+    s_r = dist_eq.Field(name='s(r)', bases=basis_ncc)
+    θ_r = dist_eq.Field(name='θ(r)', bases=basis_ncc)
+    grad_θ0_r = dist_eq.VectorField(coords, name='grad_θ0(r)', bases=basis_ncc)
+    if grad_θ0_r['g'].size > 0 :
+        logger.info(grad_θ0_r['g'].shape)
+        logger.info(grad_θ0['g'].shape)
+        for i, r_i in enumerate(r[0,0,:]):
+            grad_θ0_r['g'][:,:,:,i] = grad_θ0(r=r_i).evaluate()['g'].real
+    equilibrium = de.NLBVP([θ_r, s_r, τ_s1, τ_s2])
+    equilibrium.add_equation((- Ek/Pr*(lap(θ_r)+2*grad_θ0_r@grad(θ_r))# - grad(θ_r)@grad(θ_r))
                               + lift(τ_s1,-1) + lift(τ_s2,-2), source))
-    problem.add_equation((θ - γ*s, 0)) #EOS, s_c/cP = 1
-    equilibrium.add_equation((radial(grad(s)(r=Ri)), 0))
-    equilibrium.add_equation((s(r=Ro), 0))
+    equilibrium.add_equation((θ_r - γ*s_r, 0)) #EOS, s_c/cP = 1
+    equilibrium.add_equation((radial(grad(s_r)(r=Ri)), 0))
+    equilibrium.add_equation((s_r(r=Ro), 0))
     eq_solver = equilibrium.build_solver(ncc_cutoff=ncc_cutoff)
-    eq_solver.solve()
+    pert_norm = np.inf
+    tolerance = 1e-8
+    while pert_norm > tolerance:
+        eq_solver.newton_iteration()
+        pert_norm = sum(pert.allreduce_data_norm('c', 2) for pert in eq_solver.perturbations)
+        logger.debug(f'Perturbation norm: {pert_norm:.3e}')
+    logger.info('equilbrium acquired')
+    if s_r['g'].size > 0:
+        s['g'] += s_r['g']
+        θ['g'] += θ_r['g']
 
 # Solver
 solver = problem.build_solver(de.SBDF2, ncc_cutoff=ncc_cutoff)
@@ -399,7 +419,7 @@ FKE = KE - DRKE - MCKE #0.5*dot(u_fluc, u_fluc)
 
 Ma2_ad = 1/(γ-1)*u@u/h
 
-PE = scrC*ρ*T*s
+PE = Co2*ρ*T*s
 PE.name = 'PE'
 
 L = cross(r_vec,ρ*u)
