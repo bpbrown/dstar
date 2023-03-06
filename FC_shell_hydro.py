@@ -28,7 +28,7 @@ Options:
     --thermal_equilibrium                Start in thermal equilibrum
 
     --max_dt=<max_dt>                    Largest possible timestep [default: 0.25]
-    --safety=<safety>                    CFL safety factor [default: 0.4]
+    --safety=<safety>                    CFL safety factor [default: 0.2]
 
     --run_time_sim=<run_time>            How long to run, in rotating time units
     --run_time_iter=<niter>              How long to run, in iterations
@@ -245,9 +245,8 @@ grad_h0_g = de.Grid(grad(h0)).evaluate()
 ρ0_h0_g = de.Grid(ρ0*h0).evaluate()
 
 # Entropy source function
-H = Ma2
 def source_function(r):
-    return H
+    return 1
 
 source_func = dist.Field(name='S', bases=basis)
 source_func['g'] = source_function(r)
@@ -261,9 +260,15 @@ if θ0['g'].size > 0:
 ε = Ma2
 source = Ek/Pr*(ε*ρ0/h0*source_func)
 source.name='source'
-source_g = de.Grid(source).evaluate() # + lap(θ0_RHS) + dot(grad(θ0_RHS),grad(θ0_RHS)) ) ).evaluate()
 
-#e = 0.5*(grad(u) + trans(grad(u)))
+# terms related to the background being adiabatic rather than thermally equilibrated
+thermal_terms = Ek/Pr*(lap(θ0_RHS) + grad(θ0_RHS)@grad(θ0_RHS))
+
+# combine both together into total source term
+#total_source = (source + thermal_terms).evaluate()
+total_source = source.evaluate()
+source_g = de.Grid(total_source).evaluate()
+
 e = grad(u) + trans(grad(u))
 
 ω = curl(u)
@@ -314,17 +319,17 @@ eq = problem.equations[-1]
 eq['LHS'].valid_modes[2] *= mask
 eq['LHS'].valid_modes[0] = False
 eq['LHS'].valid_modes[1] = False
-problem.add_equation((h0*(ddt(Υ) + div(u) + u@grad_Υ0), # + lift(τ_u2,-1)@er
+problem.add_equation((h0*ddt(Υ) + h0*div(u) + h0*u@grad_Υ0 + lift(τ_u2,-1)@er,
                       -h0_g*(u@grad(Υ)) ))
 problem.add_equation((θ - (γ-1)*Υ - γ*s, 0)) #EOS, s_c/cP = 1
 #TO-DO:
 # add ohmic heat
 problem.add_equation((ρ0*(ddt(s))
-                      - Ek/Pr*(lap(θ)+2*grad_θ0@grad(θ))
+                      - Ek/Pr*lap(θ) - Ek/Pr*2*grad_θ0@grad(θ)
                       + lift(τ_s1,-1) + lift(τ_s2,-2),
                       - ρ0_g*(u@grad(s))
                       + Ek/Pr*grad(θ)@grad(θ)
-                      #+ Ek/scrC*0.5*h0_inv_g*Phi
+                      + Ek/Co2*0.5*h0_inv_g*Phi
                       + source_g ))
 # Boundary conditions
 problem.add_equation((radial(u(r=Ri)), 0))
@@ -365,7 +370,7 @@ if args['--thermal_equilibrium']:
         θ['g'] += θ_r['g']
 
 # Solver
-solver = problem.build_solver(de.SBDF2, ncc_cutoff=ncc_cutoff)
+solver = problem.build_solver(de.RK222, ncc_cutoff=ncc_cutoff)
 
 if args['--benchmark']:
     amp = 1e-1
@@ -455,8 +460,13 @@ traces.add_task(shellavg(np.sqrt(τ_L@τ_L)), name='τ_L')
 
 slice_dt = float(args['--slice_dt'])
 slices = solver.evaluator.add_file_handler(data_dir+'/slices', sim_dt = slice_dt, max_writes = 10, mode=mode)
+# for equatorial slices
 slices.add_task(s(theta=np.pi/2), name='s')
 slices.add_task(enstrophy(theta=np.pi/2), name='enstrophy')
+# for mollweide
+slices.add_task(s(r=0.95), name='s r0.95')
+slices.add_task((er@u)(r=0.95), name='ur r0.95')
+# averaged quantities
 slices.add_task(azavg(Ωz), name='<Ωz>')
 slices.add_task(azavg(s), name='<s>')
 slices.add_task(shellavg(s), name='s(r)')
