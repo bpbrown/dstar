@@ -319,7 +319,7 @@ eq = problem.equations[-1]
 eq['LHS'].valid_modes[2] *= mask
 eq['LHS'].valid_modes[0] = False
 eq['LHS'].valid_modes[1] = False
-problem.add_equation((h0*ddt(Υ) + h0*div(u) + h0*u@grad_Υ0 + lift(τ_u2,-1)@er,
+problem.add_equation((h0*ddt(Υ) + h0*div(u) + h0*u@grad_Υ0 + 1/Ek*lift(τ_u2,-1)@er,
                       -h0_g*(u@grad(Υ)) ))
 problem.add_equation((θ - (γ-1)*Υ - γ*s, 0)) #EOS, s_c/cP = 1
 #TO-DO:
