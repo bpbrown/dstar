@@ -301,7 +301,7 @@ for ncc in [ρ0, ρ0*grad(h0), ρ0*h0, ρ0*grad(θ0), h0*grad(Υ0), L_cons_ncc*�
 problem = de.IVP([u, Υ, θ, s, τ_u1, τ_u2, τ_s1, τ_s2, τ_L])
 problem.add_equation((ρ0*ddt(u) # assumes grad_s0 = 0
                       + Co2*ρ0*h0*grad(θ)
-                      + Co2*ρ0*h0*grad_h0*θ
+                      + Co2*ρ0*grad_h0*θ
                       - Co2*ρ0*h0*grad(s)
                       - Ek*viscous_terms
                       + lift(τ_u1,-1) + lift(τ_u2,-2) + τ_L,
