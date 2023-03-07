@@ -6,79 +6,67 @@ Usage:
 
 Options:
     --output=<output>    Output directory; if blank a guess based on likely case name will be made
-    --fields=<fields>    Comma separated list of fields to plot [default: ur r0.95,Br r1.0,Br r0.95]
+    --fields=<fields>    Comma separated list of fields to plot [default: ur r0.95,s r0.95]
     --dpi=<dpi>          dpi for image files (if png) [default: 300]
     --fps=<fps>          Frames per second for auto-generated mp4 movie [default: 30]
-    --no_movie           Skip movie making stage
+    --remove_m0          remove m=0 component
 """
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
+for system in ['matplotlib', 'h5py']:
+    dlog = logging.getLogger(system)
+    dlog.setLevel(logging.WARNING)
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import h5py
 
-from docopt import docopt
-args = docopt(__doc__)
-
-fields = args['--fields'].split(',')
-
-def draw_mollweide_frame(data, i, output_dir='.', dpi=300):
-
-    time = data['scales/sim_time'][i]
-    phi = data['scales/phi/1.5'][:] - np.pi
-    theta = np.pi/2 - data['scales/theta/1.5/'][:]
+def mollweide_plot(phi, theta, data, time=None, index=None, pcm=None, cmap=None, title=None, center_zero=False, norm=1):
 
     lat, lon = np.meshgrid(theta, phi)
-    for field in fields:
-        center_zero = False
-        title = '{}'.format(field)
-        if field.startswith('u'):
-            cmap = 'plasma'
-            title = field[0]+r'$_'+field[1]+'$\n$' + field.split()[-1][0] + '=' + field.split()[-1][1:] + r'$'
-        elif field.startswith('B'):
-            cmap = 'RdYlBu_r'
-            center_zero = True
-            title = field[0]+r'$_'+field[1]+'$\n$' + field.split()[-1][0] + '=' + field.split()[-1][1:] + r'$'
-        else:
-            cmap = 'viridis'
+    fig = plt.figure(figsize=(6.5, 3)) #, constrained_layout=True)
+    ax = fig.add_subplot(111, projection='mollweide')
+    fig.subplots_adjust(left=0.0, bottom=0.025, top=0.975)
+    pcm = ax.pcolormesh(lon,lat,data[:,:], cmap=cmap)
+    pmin,pmax = pcm.get_clim()
+    if center_zero:
+        cNorm = matplotlib.colors.TwoSlopeNorm(vmin=pmin, vcenter=0, vmax=pmax)
+        logger.info("centering zero: {:.1g} -- 0 -- {:.1g}".format(pmin, pmax))
+    else:
+        cNorm = matplotlib.colors.Normalize(vmin=pmin, vmax=pmax)
+    pcm = ax.pcolormesh(lon,lat,data[:,:], cmap=cmap, norm=cNorm)
+    cb_y_off = 0.25
+    ax_cb = fig.add_axes([0.9, cb_y_off, 0.02, 1-cb_y_off*2])
+    cb = fig.colorbar(pcm, cax=ax_cb, norm=cNorm, cmap=cmap)
+    cb.formatter.set_scientific(True)
+    cb.formatter.set_powerlimits((0,4))
+    cb.ax.yaxis.set_offset_position('left')
+    cb.update_ticks()
+    #cb = plt.colorbar(mappable=pcm, aspect=10, shrink=0.5, norm=cNorm, cmap=cmap)
+    #cb.set_label(label=r'$u_r(r = 0.95)$', fontsize=14)
+    #cb.set_label(label='{}'.format(field), fontsize=10)
+    #ax_cb.set_title(label=title, fontsize=10)
+    ax_cb.text(0.5, 1.25, title, horizontalalignment='center', verticalalignment='center', transform=ax_cb.transAxes)
+    ax_cb.text(0.5, -0.25, "t = {:.0f}".format(time/2)+r'$\,\Omega^{-1}$', horizontalalignment='center', verticalalignment='center', transform=ax_cb.transAxes)
+    #ax.set_title("t = {:.0f}".format(time),fontsize=12)
+    ax.yaxis.set_major_locator(plt.NullLocator())
+    ax.xaxis.set_major_formatter(plt.NullFormatter())
 
-        fig = plt.figure(figsize=(6.5, 3)) #, constrained_layout=True)
-        ax = fig.add_subplot(111, projection='mollweide')
-        fig.subplots_adjust(left=0.0, bottom=0.025, top=0.975)
-        pcm = ax.pcolormesh(lon,lat,data['tasks/{}'.format(field)][i,:,:,0], cmap=cmap)
-        pmin,pmax = pcm.get_clim()
-        if center_zero:
-            cNorm = matplotlib.colors.TwoSlopeNorm(vmin=pmin, vcenter=0, vmax=pmax)
-            logger.info("centering zero: {} -- 0 -- {}".format(pmin, pmax))
-        else:
-            cNorm = matplotlib.colors.Normalize(vmin=pmin, vmax=pmax)
-        pcm = ax.pcolormesh(lon,lat,data['tasks/{}'.format(field)][i,:,:,0], cmap=cmap, vmin=pmin, vmax=pmax, norm=cNorm)
-        cb_y_off = 0.25
-        ax_cb = fig.add_axes([0.9, cb_y_off, 0.02, 1-cb_y_off*2])
-        cb = fig.colorbar(pcm, cax=ax_cb, norm=cNorm, cmap=cmap)
-        cb.formatter.set_scientific(True)
-        cb.formatter.set_powerlimits((0,4))
-        cb.ax.yaxis.set_offset_position('left')
-        cb.update_ticks()
-        #cb = plt.colorbar(mappable=pcm, aspect=10, shrink=0.5, norm=cNorm, cmap=cmap)
-        #cb.set_label(label=r'$u_r(r = 0.95)$', fontsize=14)
-        #cb.set_label(label='{}'.format(field), fontsize=10)
-        #ax_cb.set_title(label=title, fontsize=10)
-        ax_cb.text(0.5, 1.25, title, horizontalalignment='center', verticalalignment='center', transform=ax_cb.transAxes)
-        ax_cb.text(0.5, -0.25, "t = {:.0f}".format(time/2)+r'$\,\Omega^{-1}$', horizontalalignment='center', verticalalignment='center', transform=ax_cb.transAxes)
-        #ax.set_title("t = {:.0f}".format(time),fontsize=12)
-        ax.yaxis.set_major_locator(plt.NullLocator())
-        ax.xaxis.set_major_formatter(plt.NullFormatter())
-
-        file_label = field.replace(' ','_')
-        fig.savefig("{}/{}_mollweide_{:06d}.png".format(output_dir,file_label,data['scales/write_number'][i]), dpi=dpi)
+    return fig, pcm
 
 if __name__ == "__main__":
     import pathlib
     from dedalus.tools import post
     from dedalus.tools.parallel import Sync
+
+    from docopt import docopt
+    args = docopt(__doc__)
+
+    dpi = float(args['--dpi'])
+
+    fields = args['--fields'].split(',')
 
     if args['--output'] is not None:
         output_path = pathlib.Path(args['--output']).absolute()
@@ -105,18 +93,41 @@ if __name__ == "__main__":
 
     if len(file_list) > 0:
         for file in file_list:
-            data = h5py.File(file, 'r')
-            for i in range(len(data['scales/sim_time'])):
-                draw_mollweide_frame(data,i, output_dir=str(output_path), dpi=int(args['--dpi']))
-            data.close()
+            print('reading in {:s}'.format(file))
+            f = h5py.File(file, 'r')
+            t = np.array(f['scales/sim_time'])
+            print(f['scales/write_number'][:])
+            for k in range(len(t)):
+                for i, field in enumerate(fields):
+                    time = t
+                    center_zero=False
+                    title = field
+                    task = f['tasks'][field]
+                    phi = task.dims[1][0][:] - np.pi
+                    theta = np.pi/2 - task.dims[2][0][:]
+                    r = task.dims[3][0][:]
 
-    import subprocess
-    with Sync() as sync:
-        if sync.comm.rank == 0 and not args['--no_movie']:
-            fps = int(args['--fps'])
-            for field in fields:
-                field_name = field.replace(' ','_')
-                print("saving movie {:s}.mp4".format(field_name))
-                movie_process = subprocess.run("png2mp4 {:s}/{:s} {:s}/../{:s}.mp4 {:d}".format(str(output_path), field_name, str(output_path), field_name, fps),
-                shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                logger.info(movie_process.stderr)
+                    data_slices = (k, slice(None), slice(None), 0)
+                    shell_slice = task[data_slices]
+                    center_zero = False
+                    title = '{}'.format(field)
+                    if field.startswith('u'):
+                        cmap = 'plasma'
+                        title = field[0]+r'$_'+field[1]+'$\n$' + field.split()[-1][0] + '=' + field.split()[-1][1:] + r'$'
+                    elif field.startswith('s'):
+                        cmap = 'RdYlBu_r'
+                        center_zero = True
+                        title = field[0]
+                    elif field.startswith('B'):
+                        cmap = 'RdYlBu_r'
+                        center_zero = True
+                        title = field[0]+r'$_'+field[1]+'$\n$' + field.split()[-1][0] + '=' + field.split()[-1][1:] + r'$'
+                    else:
+                        cmap = 'viridis'
+                    if args['--remove_m0']:
+                        center_zero = True
+                        shell_slice -= np.mean(shell_slice, axis=0, keepdims=True)
+                        title += "'"
+
+                    fig, pcm = mollweide_plot(phi,theta, shell_slice,time=t[k], cmap=cmap,center_zero=center_zero,title=title)
+                    fig.savefig('{:s}/{:s}_mollweide_{:06d}.png'.format(str(output_path),field.replace(' ','_'),f['scales/write_number'][k]), dpi=dpi)
