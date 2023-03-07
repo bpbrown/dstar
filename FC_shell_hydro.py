@@ -266,8 +266,8 @@ thermal_terms = Ek/Pr*(lap(θ0_RHS) + grad(θ0_RHS)@grad(θ0_RHS))
 
 # combine both together into total source term
 #total_source = (source + thermal_terms).evaluate()
-total_source = source.evaluate()
-source_g = de.Grid(total_source).evaluate()
+#source_g = de.Grid(total_source).evaluate()
+source_g = de.Grid(source).evaluate()
 
 e = grad(u) + trans(grad(u))
 
@@ -299,18 +299,19 @@ L_cons_ncc.change_scales(1)
 
 
 logger.info("NCC expansions:")
-for ncc in [ρ0, ρ0*grad(h0), ρ0*h0, ρ0*grad(θ0), h0*grad(Υ0), L_cons_ncc*ρ0]:
+for ncc in [ρ0, ρ0*grad_h0, ρ0*h0, grad_θ0, h0*grad_Υ0, L_cons_ncc*ρ0]:
     logger.info("{}: {}".format(ncc.evaluate(), np.where(np.abs(ncc.evaluate()['c']) >= ncc_cutoff)[0].shape))
 
 #Problem
 problem = de.IVP([u, Υ, θ, s, τ_u1, τ_u2, τ_s1, τ_s2, τ_L])
 problem.add_equation((ρ0*ddt(u) # assumes grad_s0 = 0
-                      + Co2*ρ0*h0*grad(θ)
                       + Co2*ρ0*grad_h0*θ
+                      + Co2*ρ0*h0*grad(θ)
                       - Co2*ρ0*h0*grad(s)
                       - Ek*viscous_terms
                       + lift(τ_u1,-1) + lift(τ_u2,-2) + τ_L,
-                      -ρ0_g*((u@grad(u)) + cross(ez_g, u))
+                      -ρ0_g*(u@grad(u))
+                      -ρ0_g*cross(ez_g, u)
                       -Co2*ρ0_grad_h0_g*(np.expm1(θ)-θ)
                       -Co2*ρ0_h0_g*np.expm1(θ)*grad(θ)
                       +Co2*ρ0_h0_g*np.expm1(θ)*grad(s) ))
@@ -370,7 +371,7 @@ if args['--thermal_equilibrium']:
         θ['g'] += θ_r['g']
 
 # Solver
-solver = problem.build_solver(de.RK222, ncc_cutoff=ncc_cutoff)
+solver = problem.build_solver(de.SBDF2, ncc_cutoff=ncc_cutoff)
 
 if args['--benchmark']:
     amp = 1e-1
