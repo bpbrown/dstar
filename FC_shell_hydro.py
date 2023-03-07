@@ -141,7 +141,7 @@ nh = nρ/m_poly
 dtype = np.float64
 coords = de.SphericalCoordinates('phi', 'theta', 'r')
 dist = de.Distributor(coords, mesh=mesh, dtype=dtype)
-radii=(Ri, Ro)
+radii = (Ri, Ro)
 if Legendre:
     basis = de.ShellBasis(coords, alpha=(0,0), shape=(Nφ, Nθ, Nr), radii=radii, dtype=dtype)
     basis_ncc = de.ShellBasis(coords, alpha=(0,0), shape=(1, 1, Nr), radii=radii, dtype=dtype)
@@ -372,7 +372,7 @@ elif args['--spectrum']:
         s['g'] += amp*norm*r**𝓁*(1-r**2)*(np.cos(𝓁*phi)+np.sin(𝓁*phi))*np.sin(theta)**𝓁
     logger.info("bandwide run with perturbations at ell={}--{}".format(𝓁_min, 𝓁))
 else:
-    amp = 1e-5
+    amp = 1e-3*ε
     noise = dist.Field(name='noise', bases=basis)
     noise.fill_random('g', seed=42, distribution='standard_normal')
     noise.low_pass_filter(scales=0.25)

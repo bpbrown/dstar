@@ -65,8 +65,9 @@ args = docopt(__doc__)
 
 import logging
 logger = logging.getLogger(__name__)
-dlog = logging.getLogger('evaluator')
-dlog.setLevel(logging.WARNING)
+for system in ['matplotlib', 'h5py', 'evaluator']:
+    dlog = logging.getLogger(system)
+    dlog.setLevel(logging.WARNING)
 
 data_dir = sys.argv[0].split('.py')[0]
 data_dir += '_Co{}_Ma{}_Ek{}_Pr{}'.format(args['--ConvectiveRossbySq'],args['--Mach'],args['--Ekman'],args['--Prandtl'])
@@ -80,6 +81,8 @@ dedalus_logging.add_file_handler(data_dir+'/logs/dedalus_log', 'DEBUG')
 Nθ = int(args['--Ntheta'])
 Nr = int(args['--Nr'])
 Nφ = Nθ*2
+
+Legendre = args['--Legendre']
 
 N_eigs = int(float(args['--eigs']))
 tol = float(args['--tol'])
@@ -105,8 +108,6 @@ logger.debug('-'*40)
 logger.info("saving data in {}".format(data_dir))
 logger.info("Run parameters")
 logger.info("Ek = {}, Co2 = {}, Ma = {}, Pr = {}".format(Ek,Co2,Ma,Pr))
-scrC = 1/(gamma-1)*Co2/Ma2
-logger.info("scrC = {:}, Co2 = {:}, Ma2 = {:}".format(scrC, Co2, Ma2))
 
 dealias = float(args['--dealias'])
 
@@ -114,16 +115,15 @@ m_poly = m_ad = 1/(γ-1)
 Ro = r_outer = 1
 Ri = r_inner = 0.7
 nh = nρ/m_poly
-c0 = -(Ri-Ro*np.exp(-nh))/(Ro-Ri)
-c1 = Ri*Ro/(Ro-Ri)*(1-np.exp(-nh))
 
 dtype = np.complex128
 coords = de.SphericalCoordinates('phi', 'theta', 'r')
 dist = de.Distributor(coords, dtype=dtype)
-if args['--Legendre']:
-    basis = de.ShellBasis(coords, alpha=(0,0), shape=(Nφ, Nθ, Nr), radii=(Ri, Ro), dtype=dtype)
+radii = (Ri, Ro)
+if Legendre:
+    basis = de.ShellBasis(coords, alpha=(0,0), shape=(Nφ, Nθ, Nr), radii=radii, dtype=dtype)
 else:
-    basis = de.ShellBasis(coords, shape=(Nφ, Nθ, Nr), radii=(Ri, Ro), dtype=dtype)
+    basis = de.ShellBasis(coords, shape=(Nφ, Nθ, Nr), radii=radii, dtype=dtype)
 basis_ncc = basis.meridional_basis
 b_S2 = basis.S2_basis()
 phi, theta, r = basis.local_grids()
@@ -151,7 +151,6 @@ lap = lambda A: de.Laplacian(A, coords)
 grad = lambda A: de.Gradient(A, coords)
 curl = lambda A: de.Curl(A)
 cross = lambda A, B: de.CrossProduct(A, B)
-ddt = lambda A: de.TimeDerivative(A)
 trans = lambda A: de.TransposeComponents(A)
 radial = lambda A: de.RadialComponent(A)
 angular = lambda A: de.AngularComponent(A, index=1)
@@ -173,12 +172,16 @@ ez_g.name='ez_g'
 
 logger.info("establishing polytrope with m = {:}, nρ = {:}, nh = {:}".format(m_ad, nρ, nh))
 
-T = dist.Field(name='T', bases=basis_ncc)
+from structure import polytrope_shell
+structure = polytrope_shell(Nr, radii, nh, m=m_poly, Legendre=Legendre, dtype=dtype, comm=MPI.COMM_SELF)
 
-T = dist.Field(bases=basis_ncc, name='T')
-T['g'] = c0 + c1/r
-lnρ = m_poly*(np.log(T)).evaluate()
-lnρ.name = 'lnρ'
+T = dist.Field(name='T', bases=basis_ncc)
+lnρ = dist.Field(name='lnρ', bases=basis_ncc)
+
+if T['g'].size > 0 :
+    for i, r_i in enumerate(r[0,0,:]):
+         T['g'][:,:,i] = structure['T'](r=r_i).evaluate()['g']
+         lnρ['g'][:,:,i] = structure['lnρ'](r=r_i).evaluate()['g']
 
 h0 = T.copy()
 h0.name = 'h0'
@@ -193,6 +196,8 @@ grad_h0 = grad(h0).evaluate()
 grad_θ0 = grad(θ0).evaluate()
 grad_Υ0 = grad(Υ0).evaluate()
 
+s0 = (1/γ*θ0 - (γ-1)/γ*Υ0).evaluate()
+
 h0_g = de.Grid(h0).evaluate()
 h0_inv_g = de.Grid(1/h0).evaluate()
 grad_h0_g = de.Grid(grad(h0)).evaluate()
@@ -204,7 +209,7 @@ grad_h0_g = de.Grid(grad(h0)).evaluate()
 # Entropy source function
 H = Ma2
 def source_function(r):
-    return H
+    return 1
 
 source_func = dist.Field(name='S', bases=basis)
 source_func['g'] = source_function(r)
@@ -220,52 +225,40 @@ source = Ek/Pr*(ε*ρ0/h0*source_func)
 source.name='source'
 source_g = de.Grid(source).evaluate() # + lap(θ0_RHS) + dot(grad(θ0_RHS),grad(θ0_RHS)) ) ).evaluate()
 
-#e = 0.5*(grad(u) + trans(grad(u)))
-e = grad(u) + trans(grad(u))
+from structure import polytrope_shell_heated
+perturbations = polytrope_shell_heated(Nr, radii, nh, ε, source_function,
+                    γ=γ, m=m_poly, Legendre=Legendre,
+                    comm=MPI.COMM_SELF, dtype=dtype)
+if perturbations['s']['g'].size > 0 :
+    for i, r_i in enumerate(r[0,0,:]):
+        s0['g'][:,:,i] += perturbations['s'](r=r_i).evaluate()['g'][0,0,0]
+        θ0['g'][:,:,i] += perturbations['θ'](r=r_i).evaluate()['g'][0,0,0]
 
-ω = curl(u)
+e = grad(u) + trans(grad(u))
 viscous_terms = div(e) - 2/3*grad(div(u))
 trace_e = trace(e)
 Phi = trace(e@e) - 1/3*(trace_e*trace_e)
 
-θ0 = dist.Field(name='θ0', bases=basis_ncc)
-θ0['g'] = np.log(h0['g'])
-s0 = dist.Field(name='s0', bases=basis_ncc)
-logger.info("solving for thermal equilbrium")
-equilibrium = de.NLBVP([θ0, s0, τ_s1, τ_s2])
-equilibrium.add_equation((- Ek/Pr*lap(θ0)
-                          + lift(τ_s1,-1) + lift(τ_s2,-2), source + Ek/Pr*grad(θ0)@grad(θ0)))
-equilibrium.add_equation((θ0 - γ*s0, 0)) #EOS, s_c/cP = 1
-equilibrium.add_equation((radial(grad(s0)(r=Ri)), 0))
-equilibrium.add_equation((s0(r=Ro), 0))
-eq_solver = equilibrium.build_solver(ncc_cutoff=ncc_cutoff)
-pert_norm = np.inf
-tolerance = 1e-8
-while pert_norm > tolerance:
-    eq_solver.newton_iteration()
-    pert_norm = sum(pert.allreduce_data_norm('c', 2) for pert in eq_solver.perturbations)
-    logger.debug(f'Perturbation norm: {pert_norm:.3e}')
-
 grad_s0 = grad(s0).evaluate()
-
 logger.info("NCC expansions:")
-for ncc in [ρ0, ρ0*grad(h0), ρ0*h0, ρ0*grad(θ0), h0*grad(Υ0), L_cons_ncc*ρ0]:
+for ncc in [ρ0, ρ0*grad_h0, ρ0*h0, ρ0*grad_θ0, h0*grad_Υ0, grad_s0]:
     logger.info("{}: {}".format(ncc.evaluate(), np.where(np.abs(ncc.evaluate()['c']) >= ncc_cutoff)[0].shape))
 
 #Problem
 omega = dist.Field(name='omega')
 ddt = lambda A: omega*A
 problem = de.EVP([u, Υ, θ, s, τ_u1, τ_u2, τ_s1, τ_s2], eigenvalue=omega)
-problem.add_equation((ρ0*(ddt(u) + scrC*(h0*grad(θ) + grad_h0*θ)
-                      - scrC*h0*grad(s) - scrC*θ*grad_s0) # check this coupling to s0
+problem.add_equation((ρ0*ddt(u) # assumes grad_s0 = 0
+                      + Co2*ρ0*grad_h0*θ
+                      + Co2*ρ0*h0*grad(θ)
+                      - Co2*ρ0*h0*grad(s)
+                      - Co2*ρ0*h0*grad_s0*θ
                       - Ek*viscous_terms
-                      - cross(ez_g, u)
-                      + lift(τ_u1,-1) + lift(τ_u2,-2), 0))
-problem.add_equation((h0*(ddt(Υ) + div(u) + u@grad_Υ0), # + lift(τ_u2,-1)@er
-                      0))
+                      + ρ0*cross(ez, u)
+                      + lift(τ_u1,-1) + lift(τ_u2,-2),
+                      0 ))
+problem.add_equation((h0*ddt(Υ) + h0*div(u) + h0*u@grad_Υ0 + 1/Ek*lift(τ_u2,-1)@er, 0))
 problem.add_equation((θ - (γ-1)*Υ - γ*s, 0)) #EOS, s_c/cP = 1
-#TO-DO:
-# add ohmic heat
 problem.add_equation((ρ0*(ddt(s) + u@grad_s0)
                       - Ek/Pr*(lap(θ)+2*grad_θ0@grad(θ))
                       + lift(τ_s1,-1) + lift(τ_s2,-2), 0 ))
@@ -281,6 +274,7 @@ logger.info("Problem built")
 # Solver
 solver = problem.build_solver(ncc_cutoff=ncc_cutoff)
 target_m = 10
+target = 0 + 1j*0
 
 subproblem = solver.subproblems_by_group[(target_m, None, None)]
 solver.solve_sparse(subproblem, N=N_eigs, target=target, rebuild_matrices=True)
@@ -288,3 +282,20 @@ i_evals = np.argsort(solver.eigenvalues.real)
 evals = solver.eigenvalues[i_evals]
 logger.info('m = {:d}, ω_max = {:.3g}, {:.3g}i'.format(target_m, evals[-1].real, evals[-1].imag))
 print(evals)
+
+
+target_m=10
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots()
+ax.scatter(evals.real, evals.imag, alpha=0.5, zorder=5)
+ax.axhline(y=0, linestyle='dashed', color='xkcd:dark grey', alpha=0.5, zorder=0)
+ax.axvline(x=0, linestyle='dashed', color='xkcd:dark grey', alpha=0.5, zorder=0)
+ax.set_title('m = {:d}, '.format(target_m)+r'$N_\theta = '+'{:d}'.format(Nθ)+r'$, $N_r = '+'{:d}'.format(Nr)+r'$')
+ax.set_xlabel(r'$\omega_R$')
+ax.set_ylabel(r'$\omega_I$')
+ax.scatter(target.real, target.imag, marker='x', label='target',  color='xkcd:dark green', alpha=0.2, zorder=1)
+ax.legend()
+fig_filename = 'eigenspectrum'
+if args['--Legendre']:
+    fig_filename += '_Legendre'
+fig.savefig(data_dir+'/'+fig_filename+'.png', dpi=300)
