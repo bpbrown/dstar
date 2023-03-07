@@ -18,7 +18,7 @@ Options:
 
     --Ntheta=<Ntheta>                    Latitudinal modes [default: 32]
     --Nr=<Nr>                            Radial modes [default: 32]
-    --dealias=<dealias>                  Degree of deailising   [default: 1.5]
+    --dealias=<dealias>                  Degree of dealiasing [default: 1.5]
     --mesh=<mesh>                        Processor mesh for 3-D runs; if not set a sensible guess will be made
 
     --benchmark                          Use benchmark initial conditions
@@ -342,19 +342,27 @@ problem.add_equation((s(r=Ro), 0))
 logger.info("Problem built")
 
 if args['--thermal_equilibrium']:
+    # hacked solution
     logger.info("solving for thermal equilbrium")
-    dist_eq = de.Distributor(coords, comm=None, dtype=dtype)
+    dist_eq = de.Distributor(coords, mesh=None, comm=MPI.COMM_SELF, dtype=dtype)
     s_r = dist_eq.Field(name='s(r)', bases=basis_ncc)
     θ_r = dist_eq.Field(name='θ(r)', bases=basis_ncc)
+    b_S2_r = basis_ncc.S2_basis()
+    τ_s1_r = dist_eq.Field(name='τ_s1', bases=b_S2_r)
+    τ_s2_r = dist_eq.Field(name='τ_s2', bases=b_S2_r)
+    lift_basis_r = basis_ncc.clone_with(k=0)
+    lift_r = lambda A, n: de.Lift(A,lift_basis_r,n)
     grad_θ0_r = dist_eq.VectorField(coords, name='grad_θ0(r)', bases=basis_ncc)
-    if grad_θ0_r['g'].size > 0 :
-        logger.info(grad_θ0_r['g'].shape)
-        logger.info(grad_θ0['g'].shape)
-        for i, r_i in enumerate(r[0,0,:]):
-            grad_θ0_r['g'][:,:,:,i] = grad_θ0(r=r_i).evaluate()['g'].real
-    equilibrium = de.NLBVP([θ_r, s_r, τ_s1, τ_s2])
-    equilibrium.add_equation((- Ek/Pr*(lap(θ_r)+2*grad_θ0_r@grad(θ_r))# - grad(θ_r)@grad(θ_r))
-                              + lift(τ_s1,-1) + lift(τ_s2,-2), source))
+    source_r = dist_eq.Field(bases=basis_ncc)
+    if grad_θ0['g'].size > 0 and rank==0:
+        print(grad_θ0_r['g'].shape, grad_θ0['g'].shape)
+        grad_θ0_r['g'] = grad_θ0['g']
+        source_r['g'][0,0,:] = source.evaluate()['g'][0,0,:]
+        s_r['g'] = 1e-2*Ma2*np.cos(np.pi/2*(r-Ri)/(Ro-Ri))
+        θ_r['g'] = γ*s_r['g']
+    equilibrium = de.NLBVP([θ_r, s_r, τ_s1_r, τ_s2_r])
+    equilibrium.add_equation((- Ek/Pr*(lap(θ_r) + 2*grad_θ0_r@grad(θ_r) + grad(θ_r)@grad(θ_r))
+                              + lift_r(τ_s1_r,-1) + lift_r(τ_s2_r,-2), source_r))
     equilibrium.add_equation((θ_r - γ*s_r, 0)) #EOS, s_c/cP = 1
     equilibrium.add_equation((radial(grad(s_r)(r=Ri)), 0))
     equilibrium.add_equation((s_r(r=Ro), 0))
