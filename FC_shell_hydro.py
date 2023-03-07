@@ -96,6 +96,8 @@ Nθ = int(args['--Ntheta'])
 Nr = int(args['--Nr'])
 Nφ = Nθ*2
 
+Legendre = args['--Legendre']
+
 if args['--run_time_iter']:
     niter = int(float(args['--run_time_iter']))
 else:
@@ -135,18 +137,17 @@ m_poly = m_ad = 1/(γ-1)
 Ro = r_outer = 1
 Ri = r_inner = 0.7
 nh = nρ/m_poly
-c0 = -(Ri-Ro*np.exp(-nh))/(Ro-Ri)
-c1 = Ri*Ro/(Ro-Ri)*(1-np.exp(-nh))
 
 dtype = np.float64
 coords = de.SphericalCoordinates('phi', 'theta', 'r')
 dist = de.Distributor(coords, mesh=mesh, dtype=dtype)
-if args['--Legendre']:
-    basis = de.ShellBasis(coords, alpha=(0,0), shape=(Nφ, Nθ, Nr), radii=(Ri, Ro), dtype=dtype)
-    basis_ncc = de.ShellBasis(coords, alpha=(0,0), shape=(1, 1, Nr), radii=(Ri, Ro), dtype=dtype)
+radii=(Ri, Ro)
+if Legendre:
+    basis = de.ShellBasis(coords, alpha=(0,0), shape=(Nφ, Nθ, Nr), radii=radii, dtype=dtype)
+    basis_ncc = de.ShellBasis(coords, alpha=(0,0), shape=(1, 1, Nr), radii=radii, dtype=dtype)
 else:
-    basis = de.ShellBasis(coords, shape=(Nφ, Nθ, Nr), radii=(Ri, Ro), dtype=dtype)
-    basis_ncc = de.ShellBasis(coords, shape=(1, 1, Nr), radii=(Ri, Ro), dtype=dtype)
+    basis = de.ShellBasis(coords, shape=(Nφ, Nθ, Nr), radii=radii, dtype=dtype)
+    basis_ncc = de.ShellBasis(coords, shape=(1, 1, Nr), radii=radii, dtype=dtype)
 b_S2 = basis.S2_basis()
 phi, theta, r = basis.local_grids()
 
@@ -216,12 +217,16 @@ r_S2['g'][2] = 1
 
 logger.info("establishing polytrope with m = {:}, nρ = {:}, nh = {:}".format(m_ad, nρ, nh))
 
-T = dist.Field(name='T', bases=basis_ncc)
+from structure import polytrope_shell
+structure = polytrope_shell(Nr, radii, nh, m=m_poly, Legendre=Legendre, dtype=dtype, comm=MPI.COMM_SELF)
 
-T = dist.Field(bases=basis_ncc, name='T')
-T['g'] = c0 + c1/r
-lnρ = m_poly*(np.log(T)).evaluate()
-lnρ.name = 'lnρ'
+T = dist.Field(name='T', bases=basis_ncc)
+lnρ = dist.Field(name='lnρ', bases=basis_ncc)
+
+if T['g'].size > 0 :
+    for i, r_i in enumerate(r[0,0,:]):
+         T['g'][:,:,i] = structure['T'](r=r_i).evaluate()['g']
+         lnρ['g'][:,:,i] = structure['lnρ'](r=r_i).evaluate()['g']
 
 h0 = T.copy()
 h0.name = 'h0'
@@ -291,7 +296,7 @@ L_cons_ncc.change_scales(padded)
 phi_pad, theta_pad, r_pad = dist.local_grids(basis, scales=padded)
 
 R_avg = (Ro+Ri)/2
-if args['--Legendre']:
+if Legendre:
     L_cons_ncc['g'] = (r_pad/R_avg)**3
 else:
     L_cons_ncc['g'] = (r_pad/R_avg)**3*np.sqrt((r_pad/Ro-1)*(1-r_pad/Ri))
@@ -354,8 +359,7 @@ if args['--thermal_equilibrium']:
     lift_r = lambda A, n: de.Lift(A,lift_basis_r,n)
     grad_θ0_r = dist_eq.VectorField(coords, name='grad_θ0(r)', bases=basis_ncc)
     source_r = dist_eq.Field(bases=basis_ncc)
-    if grad_θ0['g'].size > 0 and rank==0:
-        print(grad_θ0_r['g'].shape, grad_θ0['g'].shape)
+    if grad_θ0['g'].size > 0:
         grad_θ0_r['g'] = grad_θ0['g']
         source_r['g'][0,0,:] = source.evaluate()['g'][0,0,:]
         s_r['g'] = 1e-2*Ma2*np.cos(np.pi/2*(r-Ri)/(Ro-Ri))

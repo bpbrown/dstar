@@ -54,6 +54,71 @@ def lane_emden(Nr, m=1.5, n_rho=3, radius=1,
     structure['problem'] = {'c':c, 'b':b, 'problem':problem}
     return structure
 
+def polytrope_shell(Nr, radii, nh, m=1.5, Legendre=False,
+                    comm=None, dtype=np.float64):
+
+    Ri, Ro = radii
+    c0 = -(Ri-Ro*np.exp(-nh))/(Ro-Ri)
+    c1 = Ri*Ro/(Ro-Ri)*(1-np.exp(-nh))
+
+    coords = de.SphericalCoordinates('phi', 'theta', 'r')
+    dist = de.Distributor(coords, comm=comm, dtype=dtype)
+    if Legendre:
+        basis = de.ShellBasis(coords, alpha=(0,0), shape=(1, 1, Nr), radii=radii, dtype=dtype)
+    else:
+        basis = de.ShellBasis(coords, shape=(1, 1, Nr), radii=radii, dtype=dtype)
+
+    phi, theta, r = basis.local_grids()
+
+    T = dist.Field(name='T', bases=basis)
+    T['g'] = c0 + c1/r
+    lnρ = (m*np.log(T)).evaluate()
+    lnρ.name = 'lnρ'
+
+    structure = {'T':T,'lnρ':lnρ}
+    for key in structure:
+        structure[key].change_scales(1)
+    structure['r'] = r
+    structure['problem'] = {'c':coords, 'b':basis, 'problem':None}
+    return structure
+
+def thermal_equilibrium_heated_polytrope_shell(Nr, radii, Legendre=False, radius=1,
+               ncc_cutoff = 1e-10, tolerance = 1e-10, comm=None):
+    dist = de.Distributor(coords, comm=MPI.COMM_SELF, dtype=dtype)
+    if Legendre:
+        basis = de.ShellBasis(coords, alpha=(0,0), shape=(1, 1, Nr), radii=radii, dtype=dtype)
+    else:
+        basis = de.ShellBasis(coords, shape=(1, 1, Nr), radii=radii, dtype=dtype)
+    s = dist.Field(name='s(r)', bases=basis)
+    θ = dist.Field(name='θ(r)', bases=basis)
+    b_S2 = basis.S2_basis()
+    τ_s1 = dist.Field(name='τ_s1', bases=b_S2)
+    τ_s2 = dist.Field(name='τ_s2', bases=b_S2)
+    lift_basis = basis.clone_with(k=0)
+    lift = lambda A, n: de.Lift(A,lift_basis,n)
+    grad_θ0 = dist.VectorField(coords, name='grad_θ0(r)', bases=basis)
+    source = dist.Field(bases=basis)
+    # now we need to populate grad_θ0 and source, with global values; how are we going to do that?
+    equilibrium = de.NLBVP([θ_r, s_r, τ_s1, τ_s2])
+    equilibrium.add_equation((- Ek/Pr*(lap(θ) + 2*grad_θ0_r@grad(θ) + grad(θ)@grad(θ))
+                              + lift_r(τ_s1,-1) + lift_r(τ_s2,-2), source))
+    equilibrium.add_equation((θ_r - γ*s, 0)) #EOS, s_c/cP = 1
+    equilibrium.add_equation((radial(grad(s)(r=Ri)), 0))
+    equilibrium.add_equation((s(r=Ro), 0))
+    eq_solver = equilibrium.build_solver(ncc_cutoff=ncc_cutoff)
+
+    s['g'] = 1e-2*Ma2*np.cos(np.pi/2*(r-Ri)/(Ro-Ri))
+    θ['g'] = γ*s['g']
+
+    pert_norm = np.inf
+    tolerance = 1e-8
+    while pert_norm > tolerance:
+        eq_solver.newton_iteration()
+        pert_norm = sum(pert.allreduce_data_norm('c', 2) for pert in eq_solver.perturbations)
+        logger.debug(f'Perturbation norm: {pert_norm:.3e}')
+    logger.info('equilbrium acquired')
+
+
 if __name__=="__main__":
     LE = lane_emden(64, dtype=np.float64)
     logger.info('T: \n {}'.format(LE['T']['g']))
