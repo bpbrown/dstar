@@ -111,7 +111,9 @@ logger.info("Ek = {}, Co2 = {}, Ma = {}, Pr = {}".format(Ek,Co2,Ma,Pr))
 
 dealias = float(args['--dealias'])
 
-m_poly = m_ad = 1/(γ-1)
+ε = Ma2
+m_ad = 1/(γ-1)
+m_poly = m_ad - ε
 Ro = r_outer = 1
 Ri = r_inner = 0.7
 nh = nρ/m_poly
@@ -204,32 +206,9 @@ r_g.name='r'
 
 grad_s0 = grad(s0).evaluate()
 
-# Entropy source function
-H = Ma2
-def source_function(r):
-    return 1
-
-ε = Ma2
-
-from structure import polytrope_shell_heated
-perturbations = polytrope_shell_heated(Nr, radii, nh, ε, source_function,
-                    γ=γ, m=m_poly, Legendre=Legendre,
-                    comm=MPI.COMM_SELF, dtype=dtype)
-if perturbations['s']['g'].size > 0 :
-    for i, r_i in enumerate(r[0,0,:]):
-        s0['g'][:,:,i] += perturbations['s'](r=r_i).evaluate()['g'][0,0,0]
-        θ0['g'][:,:,i] += perturbations['θ'](r=r_i).evaluate()['g'][0,0,0]
-# update fields
-grad_θ0 = grad(θ0).evaluate()
-h0 = np.exp(θ0).evaluate()
-grad_h0 = grad(h0).evaluate()
-
 e = grad(u) + trans(grad(u))
 viscous_terms = div(e) - 2/3*grad(div(u))
-trace_e = trace(e)
-Phi = trace(e@e) - 1/3*(trace_e*trace_e)
 
-grad_s0 = grad(s0).evaluate()
 logger.info("NCC expansions:")
 for ncc in [ρ0, ρ0*grad_h0, ρ0*h0, ρ0*h0*grad_s0, grad_θ0, ρ0*grad_s0, r_g*h0*grad_Υ0, r_g*h0]:
     logger.info("{}: {}".format(ncc.evaluate(), np.where(np.abs(ncc.evaluate()['c']) >= ncc_cutoff)[0].shape))
@@ -248,13 +227,13 @@ problem.add_equation((ρ0*ddt(u) # assumes grad_s0 = 0
                       0 ))
 problem.add_equation((r_g*h0*(ddt(Υ) + div(u) + u@grad_Υ0) + 1/Ek*lift(τ_u2,-1)@er, 0))
 problem.add_equation((θ - (γ-1)*Υ - γ*s, 0)) #EOS, s_c/cP = 1
-problem.add_equation((ρ0*ddt(s) + ρ0*u@grad_s0
+problem.add_equation((ρ0*(ddt(s) + u@grad_s0)
                       - Ek/Pr*(lap(θ)+2*grad_θ0@grad(θ))
                       + lift(τ_s1,-1) + lift(τ_s2,-2), 0 ))
 # Boundary conditions
 problem.add_equation((radial(u(r=Ri)), 0))
 problem.add_equation((radial(angular(e(r=Ri))), 0))
-problem.add_equation((radial(grad(s)(r=Ri)), 0))
+problem.add_equation((s(r=Ri), 0))
 problem.add_equation((radial(u(r=Ro)), 0))
 problem.add_equation((radial(angular(e(r=Ro))), 0))
 problem.add_equation((s(r=Ro), 0))
