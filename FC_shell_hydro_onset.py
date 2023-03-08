@@ -198,32 +198,18 @@ grad_Υ0 = grad(Υ0).evaluate()
 
 s0 = (1/γ*θ0 - (γ-1)/γ*Υ0).evaluate()
 
-h0_g = de.Grid(h0).evaluate()
-h0_inv_g = de.Grid(1/h0).evaluate()
-grad_h0_g = de.Grid(grad(h0)).evaluate()
-ρ0_g = de.Grid(ρ0).evaluate()
+r_g = dist.Field(bases=basis_ncc)
+r_g['g'] = r
+r_g.name='r'
 
-ρ0_grad_h0_g = de.Grid(ρ0*grad(h0)).evaluate()
-ρ0_h0_g = de.Grid(ρ0*h0).evaluate()
+grad_s0 = grad(s0).evaluate()
 
 # Entropy source function
 H = Ma2
 def source_function(r):
     return 1
 
-source_func = dist.Field(name='S', bases=basis)
-source_func['g'] = source_function(r)
-
-# for RHS source function, need θ0 on the full ball grid (rather than just the radial grid)
-θ0_RHS = dist.Field(name='θ0_RHS', bases=basis)
-θ0.change_scales(1)
-θ0_RHS.require_grid_space()
-if θ0['g'].size > 0:
-    θ0_RHS['g'] = θ0['g']
 ε = Ma2
-source = Ek/Pr*(ε*ρ0/h0*source_func)
-source.name='source'
-source_g = de.Grid(source).evaluate() # + lap(θ0_RHS) + dot(grad(θ0_RHS),grad(θ0_RHS)) ) ).evaluate()
 
 from structure import polytrope_shell_heated
 perturbations = polytrope_shell_heated(Nr, radii, nh, ε, source_function,
@@ -233,6 +219,10 @@ if perturbations['s']['g'].size > 0 :
     for i, r_i in enumerate(r[0,0,:]):
         s0['g'][:,:,i] += perturbations['s'](r=r_i).evaluate()['g'][0,0,0]
         θ0['g'][:,:,i] += perturbations['θ'](r=r_i).evaluate()['g'][0,0,0]
+# update fields
+grad_θ0 = grad(θ0).evaluate()
+h0 = np.exp(θ0).evaluate()
+grad_h0 = grad(h0).evaluate()
 
 e = grad(u) + trans(grad(u))
 viscous_terms = div(e) - 2/3*grad(div(u))
@@ -241,9 +231,8 @@ Phi = trace(e@e) - 1/3*(trace_e*trace_e)
 
 grad_s0 = grad(s0).evaluate()
 logger.info("NCC expansions:")
-for ncc in [ρ0, ρ0*grad_h0, ρ0*h0, ρ0*grad_θ0, h0*grad_Υ0, grad_s0]:
+for ncc in [ρ0, ρ0*grad_h0, ρ0*h0, ρ0*h0*grad_s0, grad_θ0, ρ0*grad_s0, r_g*h0*grad_Υ0, r_g*h0]:
     logger.info("{}: {}".format(ncc.evaluate(), np.where(np.abs(ncc.evaluate()['c']) >= ncc_cutoff)[0].shape))
-
 #Problem
 omega = dist.Field(name='omega')
 ddt = lambda A: omega*A
@@ -257,9 +246,9 @@ problem.add_equation((ρ0*ddt(u) # assumes grad_s0 = 0
                       + ρ0*cross(ez, u)
                       + lift(τ_u1,-1) + lift(τ_u2,-2),
                       0 ))
-problem.add_equation((h0*ddt(Υ) + h0*div(u) + h0*u@grad_Υ0 + 1/Ek*lift(τ_u2,-1)@er, 0))
+problem.add_equation((r_g*h0*(ddt(Υ) + div(u) + u@grad_Υ0) + 1/Ek*lift(τ_u2,-1)@er, 0))
 problem.add_equation((θ - (γ-1)*Υ - γ*s, 0)) #EOS, s_c/cP = 1
-problem.add_equation((ρ0*(ddt(s) + u@grad_s0)
+problem.add_equation((ρ0*ddt(s) + ρ0*u@grad_s0
                       - Ek/Pr*(lap(θ)+2*grad_θ0@grad(θ))
                       + lift(τ_s1,-1) + lift(τ_s2,-2), 0 ))
 # Boundary conditions
